@@ -41,6 +41,9 @@ class Config:
     ascii_only: bool = False
     default_screen: str = DEFAULT_SCREEN
     autostart_tty1: bool = False
+    resource_flow: bool = True
+    max_flow_packets: int = 5
+    flow_intensity: str = "subtle"
 
     @property
     def ollama_base_url(self) -> str:
@@ -86,6 +89,14 @@ def load_config(path: Optional[Path] = None) -> Config:
 
     if not isinstance(raw, dict):
         return defaults
+
+    # Animation-related keys may live in an optional [animation] table;
+    # fold them into the flat namespace (table values win over nothing,
+    # explicit top-level keys win over the table).
+    animation_table = raw.get("animation")
+    if isinstance(animation_table, dict):
+        for key, value in animation_table.items():
+            raw.setdefault(key, value)
 
     values: dict[str, Any] = {}
     for field_name in defaults.__dataclass_fields__:
@@ -137,6 +148,14 @@ default_screen = "dashboard"
 # Whether the installer's TTY1 autostart hook should launch the dashboard.
 # Toggling this alone does not install the hook -- see install.sh / README.
 autostart_tty1 = false
+
+[animation]
+# Colored resource-flow packets on the Earth <-> AI Core uplink.
+# Amber = CPU, cyan = RAM, green = response returning.
+resource_flow = true
+max_flow_packets = 5
+# One of: "subtle", "normal", "vivid"
+flow_intensity = "subtle"
 """
 
 

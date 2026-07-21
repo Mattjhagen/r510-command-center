@@ -77,6 +77,14 @@ read live from the system.
 - Honest AI activity detection: the AI ACTIVITY row turns active based
   on observable OpenCode status indicators in its tmux pane (works with
   `:cloud` models too), never just because a model is loaded in memory.
+- Resource-flow animation: while OpenCode is working, colored packets
+  travel along the Earth -> AI Core uplink -- **amber** for processing
+  power (speed follows CPU load), **cyan** for memory activity (density
+  follows RAM usage) -- and when a response is visibly being generated,
+  **green** packets return from the AI Core to Earth. Idle keeps the
+  quiet dotted arc with an occasional pulse; the error state pulses red.
+  The animation reflects observable session activity and resource usage
+  only -- never chain-of-thought or model internals.
 - OpenCode integration: auto-detects the OpenCode executable and manages
   a dedicated `tmux` session for it.
 - Keyboard-driven hotkeys for a shell, logs, model list, service restart,
@@ -263,6 +271,13 @@ ascii_only = false
 
 default_screen = "dashboard"
 autostart_tty1 = false
+
+[animation]
+# Colored resource-flow packets on the Earth <-> AI Core uplink.
+resource_flow = true
+max_flow_packets = 5
+# One of: "subtle", "normal", "vivid"
+flow_intensity = "subtle"
 ```
 
 | Key                | Default                          | Description                                              |
@@ -279,6 +294,12 @@ autostart_tty1 = false
 | `ascii_only`       | `false`                          | Start in ASCII-only mode (no Unicode box-drawing/symbols).  |
 | `default_screen`   | `dashboard`                      | Reserved for a future multi-screen default.                 |
 | `autostart_tty1`   | `false`                          | Informational; the actual hook is installed by `install.sh`.|
+| `resource_flow`    | `true`                           | Colored resource packets on the uplink path.                |
+| `max_flow_packets` | `5`                              | Upper bound on simultaneously visible flow packets.         |
+| `flow_intensity`   | `subtle`                         | Packet density: `subtle`, `normal`, or `vivid`.             |
+
+The `[animation]` keys may also be written at the top level; existing
+config files without them keep working unchanged.
 
 Missing, empty, or malformed config files always fall back to defaults --
 the dashboard never fails to start because of a bad config.

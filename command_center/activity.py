@@ -40,6 +40,14 @@ ACTIVE_MARKERS = (
     "esc interrupt",
 )
 
+# Subset of markers that indicate output is being produced (the reply
+# leg of the round trip) rather than the request being worked on.
+RESPONSE_MARKERS = ("generating",)
+
+# How long a fresh burst of activity counts as the UPLOAD phase before
+# settling into PROCESSING.
+UPLOAD_SECONDS = 2.0
+
 
 class AIActivityState(str, Enum):
     ACTIVE = "ACTIVE"
@@ -48,12 +56,43 @@ class AIActivityState(str, Enum):
     ERROR = "ERROR"
 
 
+class AIFlowPhase(str, Enum):
+    """Direction/meaning of the animated Earth <-> AI Core data flow.
+
+    Derived purely from observable signals (visible OpenCode status
+    words, service state) -- never from model internals.
+    """
+
+    IDLE = "IDLE"
+    UPLOAD = "UPLOAD"
+    PROCESSING = "PROCESSING"
+    RESPONSE = "RESPONSE"
+    ERROR = "ERROR"
+
+
+@dataclass(frozen=True)
+class PaneObservation:
+    """What the last pane capture showed, without any pane content."""
+
+    active: bool = False
+    response_marker: bool = False
+    active_seconds: float = 0.0
+
+
 def has_active_marker(pane: str, final_lines: int = FINAL_LINES) -> bool:
     """True when the last visible lines of a pane capture contain a
     recognized in-flight status indicator."""
     lines = [line for line in pane.splitlines() if line.strip()]
     tail = "\n".join(lines[-final_lines:]).lower()
     return any(marker in tail for marker in ACTIVE_MARKERS)
+
+
+def has_response_marker(pane: str, final_lines: int = FINAL_LINES) -> bool:
+    """True when the final visible lines indicate output is being
+    generated (the reply leg), as opposed to the request being worked on."""
+    lines = [line for line in pane.splitlines() if line.strip()]
+    tail = "\n".join(lines[-final_lines:]).lower()
+    return any(marker in tail for marker in RESPONSE_MARKERS)
 
 
 def capture_pane(session: str, timeout: float = CAPTURE_TIMEOUT) -> Optional[str]:
@@ -95,6 +134,8 @@ class ActivityMonitor:
     _last_change: Optional[float] = None
     _next_poll: float = 0.0
     _opencode_active: bool = False
+    _active_since: Optional[float] = None
+    _response_marker: bool = False
 
     def update(self, pane: Optional[str], now: float) -> bool:
         """Fold one pane capture into the monitor state.
@@ -106,13 +147,32 @@ class ActivityMonitor:
             self._last_pane = None
             self._last_change = None
             self._opencode_active = False
+            self._active_since = None
+            self._response_marker = False
             return False
         if pane != self._last_pane:
             self._last_pane = pane
             self._last_change = now
         fresh = self._last_change is not None and (now - self._last_change) <= self.stale_after
-        self._opencode_active = fresh and has_active_marker(pane)
+        active = fresh and has_active_marker(pane)
+        if active and not self._opencode_active:
+            self._active_since = now
+        elif not active:
+            self._active_since = None
+        self._opencode_active = active
+        self._response_marker = active and has_response_marker(pane)
         return self._opencode_active
+
+    def observation(self, now: float) -> PaneObservation:
+        """Snapshot of the latest pane state for flow-phase derivation."""
+        active_seconds = 0.0
+        if self._opencode_active and self._active_since is not None:
+            active_seconds = max(0.0, now - self._active_since)
+        return PaneObservation(
+            active=self._opencode_active,
+            response_marker=self._response_marker,
+            active_seconds=active_seconds,
+        )
 
     def poll(self, now: float) -> bool:
         """Rate-limited capture + update; at most one tmux call per
@@ -121,6 +181,25 @@ class ActivityMonitor:
             return self._opencode_active
         self._next_poll = now + self.poll_interval
         return self.update(capture_pane(self.session), now)
+
+
+def flow_phase(state: AIActivityState, obs: PaneObservation) -> AIFlowPhase:
+    """Map the observable activity state to a data-flow phase.
+
+    - A fresh burst of activity reads as UPLOAD (request going up).
+    - Sustained activity reads as PROCESSING (Earth -> AI Core).
+    - A visible response indicator reads as RESPONSE (AI Core -> Earth).
+    - Everything else keeps the link quiet.
+    """
+    if state == AIActivityState.ERROR:
+        return AIFlowPhase.ERROR
+    if state != AIActivityState.ACTIVE or not obs.active:
+        return AIFlowPhase.IDLE
+    if obs.response_marker:
+        return AIFlowPhase.RESPONSE
+    if obs.active_seconds < UPLOAD_SECONDS:
+        return AIFlowPhase.UPLOAD
+    return AIFlowPhase.PROCESSING
 
 
 def derive_state(ollama_state: OllamaState, opencode_active: bool) -> AIActivityState:

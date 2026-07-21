@@ -117,6 +117,7 @@ def run(stdscr, config: Config) -> None:
 
         opencode_active = activity_monitor.poll(now)
         ai_state = activity.derive_state(ollama_status.state, opencode_active)
+        flow_phase = activity.flow_phase(ai_state, activity_monitor.observation(now))
 
         max_y, max_x = stdscr.getmaxyx()
         stdscr.erase()
@@ -131,6 +132,7 @@ def run(stdscr, config: Config) -> None:
                 telemetry,
                 ollama_status,
                 ai_state,
+                flow_phase,
                 opencode_path,
                 tmux_state,
                 tick,
@@ -252,6 +254,17 @@ def _draw_too_small(stdscr, max_y: int, max_x: int) -> None:
     rendering.safe_addstr(stdscr, y, x, message)
 
 
+# Packet colors: amber for processing power, cyan for memory, green for
+# a response returning, red for the error state. Falls back to bold
+# monochrome via attr() when color is unavailable or toggled off.
+_PACKET_COLOR = {
+    animation.PacketKind.CPU: rendering.COLOR_PAIR_WARN,
+    animation.PacketKind.RAM: rendering.COLOR_PAIR_NORMAL,
+    animation.PacketKind.RESPONSE: rendering.COLOR_PAIR_GOOD,
+    animation.PacketKind.ERROR: rendering.COLOR_PAIR_BAD,
+    animation.PacketKind.IDLE: rendering.COLOR_PAIR_ACCENT,
+}
+
 _OLLAMA_COLOR = {
     ollama.OllamaState.ONLINE: rendering.COLOR_PAIR_GOOD,
     ollama.OllamaState.BUSY: rendering.COLOR_PAIR_WARN,
@@ -268,6 +281,7 @@ def _draw_dashboard(
     telemetry: Telemetry,
     ollama_status: ollama.OllamaStatus,
     ai_state: activity.AIActivityState,
+    flow_phase: activity.AIFlowPhase,
     opencode_path: Optional[str],
     tmux_state: str,
     tick: int,
@@ -320,6 +334,13 @@ def _draw_dashboard(
             reduced_motion=state.reduced_motion,
             ascii_only=ascii_only,
             status_hint=status_hint,
+            flow_phase=flow_phase,
+            cpu_percent=telemetry.cpu_percent,
+            ram_percent=telemetry.ram_percent,
+            net_bytes_per_sec=telemetry.net_rx_bytes_per_sec + telemetry.net_tx_bytes_per_sec,
+            resource_flow=config.resource_flow,
+            max_flow_packets=config.max_flow_packets,
+            flow_intensity=config.flow_intensity,
         )
         for i, line in enumerate(frame.lines):
             row = anim_top + i
@@ -331,6 +352,12 @@ def _draw_dashboard(
         for hy, hx in frame.highlights:
             if 0 <= hy < len(frame.lines) and 0 <= hx < len(frame.lines[hy]):
                 rendering.safe_addstr(stdscr, anim_top + hy, 1 + hx, frame.lines[hy][hx], accent)
+        for (py, px), kind in frame.packet_cells.items():
+            if 0 <= py < len(frame.lines) and 0 <= px < len(frame.lines[py]):
+                pair = _PACKET_COLOR.get(kind, rendering.COLOR_PAIR_ACCENT)
+                rendering.safe_addstr(
+                    stdscr, anim_top + py, 1 + px, frame.lines[py][px], attr(pair, bold=True)
+                )
     else:
         rendering.safe_addstr(stdscr, anim_top, 1, "[ animation hidden -- widen terminal ]", dim)
 
