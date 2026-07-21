@@ -1,5 +1,24 @@
 # R510 Command Center
 
+       .      *
+            .                *
+
+      .-""""-.
+   .-'  EARTH '-.
+
+──────────────►►►►►►►►►►──────────────
+
+                    .--------.
+                 .-'  AI HUB  '-.
+              .-'==============='-.
+             /  O   O   O   O     \
+            |    ◉  CPU CLUSTER    |
+             \____________________/
+                 \  |  |  |  /
+                  \_|__|__|_/
+                     /  \
+               solar panels
+
 A full-screen, animated ASCII command center for a local AI server -- built
 to run directly on `tty1` of a headless Ubuntu Server box, no desktop
 environment required. Think NASA mission control meets a Starlink ground
