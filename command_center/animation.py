@@ -166,11 +166,10 @@ def render(
             highlights.add((sat_row, pos))
 
     lines = ["".join(row) for row in grid]
-    scanline_row = None if reduced_motion else tick % height
 
     return AnimationFrame(
         lines=lines,
         highlights=highlights,
-        scanline_row=scanline_row,
+        scanline_row=None,
         status_text=status_hint or "UPLINK ESTABLISHED",
     )
