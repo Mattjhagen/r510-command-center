@@ -90,7 +90,8 @@ def test_get_status_offline_when_systemctl_unknown_and_api_unreachable(monkeypat
     assert status.state == OllamaState.OFFLINE
 
 
-def test_get_status_busy_when_model_running(monkeypatch) -> None:
+def test_loaded_model_does_not_imply_busy(monkeypatch) -> None:
+    """/api/ps only means a model is resident in memory, not generating."""
     responses = {
         "tags": {"models": [{"name": "llama3:8b"}]},
         "ps": {"models": [{"name": "llama3:8b"}]},
@@ -102,7 +103,8 @@ def test_get_status_busy_when_model_running(monkeypatch) -> None:
     monkeypatch.setattr("command_center.ollama.systemctl_is_active", lambda *a, **k: True)
     monkeypatch.setattr("command_center.ollama._http_get_json", fake_http)
     status = get_status()
-    assert status.state == OllamaState.BUSY
+    assert status.state == OllamaState.ONLINE
+    assert status.state != OllamaState.BUSY
     assert status.current_model == "llama3:8b"
 
 

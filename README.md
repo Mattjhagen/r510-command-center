@@ -71,9 +71,12 @@ read live from the system.
   per-core), RAM, swap, root disk usage, load averages, process count,
   logged-in users, temperature (when sensors are available), and network
   throughput.
-- Ollama integration: state (`ONLINE` / `BUSY` / `IDLE` / `OFFLINE` /
-  `ERROR`) determined from both `systemctl` and the Ollama HTTP API,
-  installed model list, and the currently loaded model.
+- Ollama integration: state (`ONLINE` / `IDLE` / `OFFLINE` / `ERROR`)
+  determined from both `systemctl` and the Ollama HTTP API, installed
+  model list, and the currently loaded model.
+- Honest AI activity detection: the AI ACTIVITY row turns active based
+  on observable OpenCode status indicators in its tmux pane (works with
+  `:cloud` models too), never just because a model is loaded in memory.
 - OpenCode integration: auto-detects the OpenCode executable and manages
   a dedicated `tmux` session for it.
 - Keyboard-driven hotkeys for a shell, logs, model list, service restart,
@@ -212,9 +215,18 @@ dashboard can tell "stopped" apart from "running but unhealthy":
 |-----------|-----------------------------------------------------------------------|
 | `OFFLINE` | The `ollama` service is confirmed not running.                       |
 | `ERROR`   | The service is active, but the HTTP API can't be reached.            |
-| `BUSY`    | The API is reachable and a model is currently loaded.                |
-| `IDLE`    | The API is reachable, nothing is loaded, and no models are installed.|
-| `ONLINE`  | The API is reachable, nothing is loaded, but models are installed.   |
+| `IDLE`    | The API is reachable, but no models are installed.                   |
+| `ONLINE`  | The API is reachable and models are installed or loaded.             |
+
+A model appearing in `/api/ps` only means it is resident in memory, not
+that it is generating, so it never flips the state to busy on its own.
+Instead, the AI ACTIVITY row watches the OpenCode tmux pane for visible
+status indicators (`Thinking`, `Generating`, `esc interrupt`, ...) and
+recent pane changes -- this also catches requests served by `:cloud`
+models, which never show up in `/api/ps`. Only coarse interface status
+words are inspected; prompt and response content is never parsed or
+displayed. The pane check runs at most once per second with a short
+timeout.
 
 All HTTP calls use a short timeout (well under a second) so an
 unreachable or hung daemon never freezes the dashboard's render loop.

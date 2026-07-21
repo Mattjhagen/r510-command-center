@@ -26,7 +26,7 @@ DEFAULT_TIMEOUT = 0.6
 
 class OllamaState(str, Enum):
     ONLINE = "ONLINE"
-    BUSY = "BUSY"
+    BUSY = "BUSY"  # deprecated: no longer produced by get_status()
     IDLE = "IDLE"
     OFFLINE = "OFFLINE"
     ERROR = "ERROR"
@@ -117,11 +117,15 @@ def get_status(
 
     - ``OFFLINE``: the systemd unit is confirmed not active.
     - ``ERROR``: the unit is active but the HTTP API cannot be reached.
-    - ``BUSY``: the API is reachable and at least one model is loaded.
-    - ``IDLE``: the API is reachable, nothing is loaded, and no models
-      are installed at all (nothing *to* load).
-    - ``ONLINE``: the API is reachable, nothing is loaded, but models are
-      installed and ready to serve a request.
+    - ``IDLE``: the API is reachable but no models are installed at all
+      (nothing *to* load).
+    - ``ONLINE``: the API is reachable and models are installed or
+      loaded, ready to serve a request.
+
+    A model appearing in ``/api/ps`` only means it is resident in
+    memory, not that it is generating -- so it is never reported as
+    ``BUSY`` here. Active generation is detected separately from
+    observable signals (see :mod:`command_center.activity`).
 
     Always returns promptly regardless of the daemon's actual health.
     """
@@ -141,11 +145,9 @@ def get_status(
     ps_data = _http_get_json(f"{base_url}/api/ps", timeout)
     running = parse_ps_response(ps_data)
 
-    if running:
-        state = OllamaState.BUSY
-    elif not installed:
-        state = OllamaState.IDLE
-    else:
+    if installed or running:
         state = OllamaState.ONLINE
+    else:
+        state = OllamaState.IDLE
 
     return OllamaStatus(state=state, installed_models=installed, running_models=running)

@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from . import actions, animation, ollama, rendering, screens
+from . import actions, activity, animation, ollama, rendering, screens
 from .config import Config, find_opencode_executable, load_config
 from .telemetry import Telemetry, TelemetryCollector, format_rate, format_uptime
 
@@ -26,9 +26,9 @@ FRAME_DELAY_MS = max(80, int(1000 / TARGET_FPS))
 SLOW_REFRESH_SECONDS = 3.0
 TELEMETRY_LINES = 9
 
-# Observable activity summary phases shown while Ollama is BUSY. These are
-# generic pipeline stages, not model output -- no prompts, responses, or
-# reasoning ever appear here.
+# Observable activity summary phases shown while AI work is detected as
+# ACTIVE. These are generic pipeline stages, not model output -- no
+# prompts, responses, or reasoning ever appear here.
 AI_BUSY_PHASES = (
     "analyzing context",
     "planning next action",
@@ -99,6 +99,8 @@ def run(stdscr, config: Config) -> None:
     ollama_status = ollama.OllamaStatus()
     opencode_path = find_opencode_executable(config)
     tmux_state = "NONE"
+    activity_monitor = activity.ActivityMonitor(config.tmux_session)
+    ai_state = activity.AIActivityState.IDLE
 
     tick = 0
     next_slow_refresh = 0.0
@@ -113,6 +115,9 @@ def run(stdscr, config: Config) -> None:
             tmux_state = _tmux_session_state(config.tmux_session)
             next_slow_refresh = now + SLOW_REFRESH_SECONDS
 
+        opencode_active = activity_monitor.poll(now)
+        ai_state = activity.derive_state(ollama_status.state, opencode_active)
+
         max_y, max_x = stdscr.getmaxyx()
         stdscr.erase()
 
@@ -125,6 +130,7 @@ def run(stdscr, config: Config) -> None:
                 state,
                 telemetry,
                 ollama_status,
+                ai_state,
                 opencode_path,
                 tmux_state,
                 tick,
@@ -197,21 +203,22 @@ def _handle_key(
     return None
 
 
-def _ai_activity_text(state: ollama.OllamaState, tick: int, ascii_only: bool) -> str:
+def _ai_activity_text(state: activity.AIActivityState, tick: int, ascii_only: bool) -> str:
     """Short, observable AI activity summary for the telemetry footer row.
 
-    Pure function of the Ollama state and the animation tick. While BUSY it
-    slowly cycles through generic pipeline-stage phrases with a small
-    animated dot suffix; other states map to a single static phrase.
+    Pure function of the derived activity state and the animation tick.
+    While ACTIVE it slowly cycles through generic pipeline-stage phrases
+    with a small animated dot suffix; other states map to a single
+    static phrase.
     """
-    if state == ollama.OllamaState.BUSY:
+    if state == activity.AIActivityState.ACTIVE:
         phase = AI_BUSY_PHASES[(tick // AI_PHASE_TICKS) % len(AI_BUSY_PHASES)]
         dot = "." if ascii_only else "·"
         dots = dot * ((tick // 4) % 3 + 1)
         return f"{phase} {dots}"
-    if state in (ollama.OllamaState.ONLINE, ollama.OllamaState.IDLE):
+    if state == activity.AIActivityState.IDLE:
         return "standing by for uplink"
-    if state == ollama.OllamaState.OFFLINE:
+    if state == activity.AIActivityState.OFFLINE:
         return "uplink offline"
     return "telemetry unavailable"
 
@@ -260,6 +267,7 @@ def _draw_dashboard(
     state: RuntimeState,
     telemetry: Telemetry,
     ollama_status: ollama.OllamaStatus,
+    ai_state: activity.AIActivityState,
     opencode_path: Optional[str],
     tmux_state: str,
     tick: int,
@@ -285,7 +293,7 @@ def _draw_dashboard(
         attr(rendering.COLOR_PAIR_ACCENT, bold=True),
     )
 
-    status_hint = "PROCESSING" if ollama_status.state == ollama.OllamaState.BUSY else "UPLINK ESTABLISHED"
+    status_hint = "PROCESSING" if ai_state == activity.AIActivityState.ACTIVE else "UPLINK ESTABLISHED"
     separator = "-" if ascii_only else "·"
     subtitle = f"NODE ONLINE {separator} {status_hint}"
     rendering.safe_addstr(stdscr, 2, 1, rendering.center_text(subtitle, content_width), dim)
@@ -385,13 +393,13 @@ def _draw_dashboard(
     )
     row += 1
 
-    busy = ollama_status.state == ollama.OllamaState.BUSY
-    activity = _ai_activity_text(ollama_status.state, tick, ascii_only)
+    ai_active = ai_state == activity.AIActivityState.ACTIVE
+    activity_text = _ai_activity_text(ai_state, tick, ascii_only)
     rendering.safe_addstr(stdscr, row, col1_x, "AI ACTIVITY", normal)
     rendering.safe_addstr(
         stdscr, row, col1_x + 13,
-        activity[: max(0, content_width - 13)],
-        attr(rendering.COLOR_PAIR_ACCENT) if busy else dim,
+        activity_text[: max(0, content_width - 13)],
+        attr(rendering.COLOR_PAIR_ACCENT) if ai_active else dim,
     )
 
     rendering.draw_hline(stdscr, footer_sep_row, 1, content_width, ascii_only, normal)
