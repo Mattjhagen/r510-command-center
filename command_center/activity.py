@@ -163,6 +163,12 @@ class ActivityMonitor:
         self._response_marker = active and has_response_marker(pane)
         return self._opencode_active
 
+    @property
+    def pane_seen(self) -> bool:
+        """Whether the most recent capture actually returned a pane --
+        proof the tmux session exists, independent of list-sessions."""
+        return self._last_pane is not None
+
     def observation(self, now: float) -> PaneObservation:
         """Snapshot of the latest pane state for flow-phase derivation."""
         active_seconds = 0.0

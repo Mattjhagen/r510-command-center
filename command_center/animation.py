@@ -78,6 +78,7 @@ class AnimationFrame:
     lines: list[str] = field(default_factory=list)
     highlights: set[tuple[int, int]] = field(default_factory=set)
     packet_cells: dict[tuple[int, int], PacketKind] = field(default_factory=dict)
+    trail_cells: dict[tuple[int, int], PacketKind] = field(default_factory=dict)
     scanline_row: int | None = None
     status_text: str = "UPLINK ESTABLISHED"
 
@@ -125,11 +126,12 @@ def _clamp_percent(value: float) -> float:
 def _packet_speed(cpu_percent: float) -> float:
     """CPU load -> packet speed in progress-units per tick.
 
-    Monotonic and clamped: idle CPU crawls (~17 s to cross), saturated
-    CPU stays readable (~3 s to cross) instead of becoming a blur.
+    Monotonic and clamped: idle CPU moves visibly (~9 s to cross),
+    saturated CPU stays readable (~2.7 s to cross) instead of becoming
+    a blur.
     """
     cpu = _clamp_percent(cpu_percent)
-    return 0.008 + (cpu / 100.0) * 0.037
+    return 0.016 + (cpu / 100.0) * 0.037
 
 
 def _cpu_packet_count(cpu_percent: float) -> int:
@@ -193,7 +195,7 @@ def build_flow_packets(
         return packets[:max_packets]
 
     if phase == AIFlowPhase.ERROR:
-        progress = (tick * 0.01) % 1.0
+        progress = (tick * 0.02) % 1.0
         packets.append(FlowPacket(progress, PacketKind.ERROR, FORWARD))
         return packets[:max_packets]
 
@@ -207,7 +209,7 @@ def build_flow_packets(
         for i in range(ram_count):
             # Memory packets drift at a steady pace, offset from the CPU
             # packets so the two streams stay distinguishable.
-            progress = (tick * 0.018 + (i + 0.5) / max(1, ram_count)) % 1.0
+            progress = (tick * 0.036 + (i + 0.5) / max(1, ram_count)) % 1.0
             packets.append(FlowPacket(progress, PacketKind.RAM, FORWARD))
         return packets[:max_packets]
 
@@ -261,6 +263,7 @@ def render(
     grid = [[" "] * width for _ in range(height)]
     highlights: set[tuple[int, int]] = set()
     packet_cells: dict[tuple[int, int], PacketKind] = {}
+    trail_cells: dict[tuple[int, int], PacketKind] = {}
 
     if width >= 24 and height >= 6:
         earth_top = max(0, (height - len(EARTH_ART)) // 2 - 1)
@@ -307,6 +310,16 @@ def render(
                     unicode_char, ascii_char = PACKET_CHARS[packet.kind]
                     grid[y][x] = ascii_char if ascii_only else unicode_char
                     packet_cells[(y, x)] = packet.kind
+                    # One-frame trail: tint the arc dot the packet just
+                    # left, so motion direction reads at a glance.
+                    if not reduced_motion:
+                        trail_idx = idx - packet.direction
+                        if 0 <= trail_idx < len(arc_points):
+                            ty, tx = arc_points[trail_idx]
+                            if (ty, tx) not in packet_cells:
+                                trail_cells[(ty, tx)] = packet.kind
+                for coord in packet_cells:
+                    trail_cells.pop(coord, None)
             else:
                 speed = 1 if reduced_motion else 2
                 packet_char = "o" if ascii_only else "◆"  # ◆
@@ -346,6 +359,7 @@ def render(
         lines=lines,
         highlights=highlights,
         packet_cells=packet_cells,
+        trail_cells=trail_cells,
         scanline_row=None,
         status_text=status_hint or "UPLINK ESTABLISHED",
     )

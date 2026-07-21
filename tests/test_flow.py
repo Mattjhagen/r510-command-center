@@ -111,6 +111,42 @@ def test_every_packet_kind_has_a_color_mapping() -> None:
     assert set(_PACKET_COLOR) == set(PacketKind)
 
 
+def test_packet_kinds_map_to_distinct_intended_color_roles() -> None:
+    from command_center import rendering
+    from command_center.app import _PACKET_COLOR
+
+    assert _PACKET_COLOR[PacketKind.CPU] == rendering.COLOR_PAIR_WARN  # amber
+    assert _PACKET_COLOR[PacketKind.RAM] == rendering.COLOR_PAIR_NORMAL  # cyan
+    assert _PACKET_COLOR[PacketKind.RESPONSE] == rendering.COLOR_PAIR_GOOD  # green
+    assert _PACKET_COLOR[PacketKind.ERROR] == rendering.COLOR_PAIR_BAD  # red
+    assert _PACKET_COLOR[PacketKind.IDLE] == rendering.COLOR_PAIR_DIM  # dim, not accent
+
+    resource_kinds = (PacketKind.CPU, PacketKind.RAM, PacketKind.RESPONSE, PacketKind.ERROR)
+    pairs = [_PACKET_COLOR[kind] for kind in resource_kinds]
+    assert len(set(pairs)) == len(pairs)
+    assert rendering.COLOR_PAIR_ACCENT not in pairs
+
+
+def test_minimum_packet_speed_is_visible() -> None:
+    # Live testing found the original 0.008/tick floor too subtle; the
+    # floor is now doubled.
+    assert _packet_speed(0) >= 0.016
+
+
+def test_reduced_motion_caps_packets_and_skips_trails() -> None:
+    frame = render(
+        80, 12, tick=9, reduced_motion=True,
+        flow_phase=AIFlowPhase.PROCESSING, cpu_percent=95, ram_percent=95,
+    )
+    assert len(frame.packet_cells) <= 1
+    assert not frame.trail_cells
+
+
+def test_processing_shows_at_least_two_packets() -> None:
+    packets = build_flow_packets(7, AIFlowPhase.PROCESSING, 5, 5)
+    assert len(packets) >= 2
+
+
 def test_resource_flow_disabled_restores_legacy_packets() -> None:
     frame = render(
         80, 12, tick=9,

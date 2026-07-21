@@ -41,6 +41,49 @@ AI_PHASE_TICKS = TARGET_FPS * 2  # rotate busy phases roughly every two seconds
 KEY_ACTIONS = {"o", "s", "l", "m", "r", "t", "n", "h", "?"}
 
 
+@dataclass(frozen=True)
+class Layout:
+    """Row positions for the dashboard's fixed vertical layout."""
+
+    bottom_border_row: int
+    footer_row: int
+    footer_sep_row: int
+    telemetry_end_row: int
+    telemetry_start_row: int
+    telemetry_header_row: int
+    anim_top: int
+    anim_bottom: int
+    anim_height: int
+
+
+def compute_layout(max_y: int) -> Layout:
+    """Compute the dashboard's row layout, bottom-up.
+
+    The telemetry block always keeps its fixed height; the animation
+    simply gets whatever space is left between the header rows and the
+    telemetry header.
+    """
+    bottom_border_row = max_y - 1
+    footer_row = bottom_border_row - 1
+    footer_sep_row = footer_row - 1
+    telemetry_end_row = footer_sep_row - 1
+    telemetry_start_row = telemetry_end_row - TELEMETRY_LINES + 1
+    telemetry_header_row = telemetry_start_row - 1
+    anim_top = 4
+    anim_bottom = telemetry_header_row - 1
+    return Layout(
+        bottom_border_row=bottom_border_row,
+        footer_row=footer_row,
+        footer_sep_row=footer_sep_row,
+        telemetry_end_row=telemetry_end_row,
+        telemetry_start_row=telemetry_start_row,
+        telemetry_header_row=telemetry_header_row,
+        anim_top=anim_top,
+        anim_bottom=anim_bottom,
+        anim_height=max(0, anim_bottom - anim_top + 1),
+    )
+
+
 @dataclass
 class RuntimeState:
     """Mutable, per-session runtime toggles.
@@ -98,7 +141,7 @@ def run(stdscr, config: Config) -> None:
     telemetry = telemetry_collector.collect()
     ollama_status = ollama.OllamaStatus()
     opencode_path = find_opencode_executable(config)
-    tmux_state = "NONE"
+    tmux_state = tmux_state_raw = "NONE"
     activity_monitor = activity.ActivityMonitor(config.tmux_session)
     ai_state = activity.AIActivityState.IDLE
 
@@ -112,12 +155,13 @@ def run(stdscr, config: Config) -> None:
         if now >= next_slow_refresh:
             ollama_status = ollama.get_status(config.ollama_host, config.ollama_port)
             opencode_path = find_opencode_executable(config)
-            tmux_state = _tmux_session_state(config.tmux_session)
+            tmux_state_raw = _tmux_session_state(config.tmux_session)
             next_slow_refresh = now + SLOW_REFRESH_SECONDS
 
         opencode_active = activity_monitor.poll(now)
         ai_state = activity.derive_state(ollama_status.state, opencode_active)
         flow_phase = activity.flow_phase(ai_state, activity_monitor.observation(now))
+        tmux_state = _resolve_tmux_state(tmux_state_raw, activity_monitor.pane_seen)
 
         max_y, max_x = stdscr.getmaxyx()
         stdscr.erase()
@@ -259,8 +303,25 @@ def _tmux_session_state(session: str) -> str:
     for line in result.stdout.splitlines():
         name, _, attached = line.partition(":")
         if name == session:
-            return "ATTACHED" if attached.strip() == "1" else "DETACHED"
+            try:
+                attached_clients = int(attached.strip() or "0")
+            except ValueError:
+                attached_clients = 0
+            return "ATTACHED" if attached_clients > 0 else "DETACHED"
     return "NONE"
+
+
+def _resolve_tmux_state(raw_state: str, pane_seen: bool) -> str:
+    """Cross-check tmux session listing against the ActivityMonitor.
+
+    A successful ``capture-pane`` proves the session exists, so if the
+    listing said NONE (a transient race, or list-sessions briefly
+    failing) but the monitor captured a pane this cycle, report the
+    session as at least DETACHED instead of NONE.
+    """
+    if raw_state == "NONE" and pane_seen:
+        return "DETACHED"
+    return raw_state
 
 
 def _draw_too_small(stdscr, max_y: int, max_x: int) -> None:
@@ -271,14 +332,15 @@ def _draw_too_small(stdscr, max_y: int, max_x: int) -> None:
 
 
 # Packet colors: amber for processing power, cyan for memory, green for
-# a response returning, red for the error state. Falls back to bold
-# monochrome via attr() when color is unavailable or toggled off.
+# a response returning, red for the error state, and a dim idle pulse.
+# Falls back to bold monochrome via attr() when color is unavailable or
+# toggled off.
 _PACKET_COLOR = {
     animation.PacketKind.CPU: rendering.COLOR_PAIR_WARN,
     animation.PacketKind.RAM: rendering.COLOR_PAIR_NORMAL,
     animation.PacketKind.RESPONSE: rendering.COLOR_PAIR_GOOD,
     animation.PacketKind.ERROR: rendering.COLOR_PAIR_BAD,
-    animation.PacketKind.IDLE: rendering.COLOR_PAIR_ACCENT,
+    animation.PacketKind.IDLE: rendering.COLOR_PAIR_DIM,
 }
 
 _OLLAMA_COLOR = {
@@ -330,17 +392,13 @@ def _draw_dashboard(
 
     rendering.draw_hline(stdscr, 3, 1, content_width, ascii_only, normal)
 
-    # Layout, computed bottom-up so the telemetry block always keeps its
-    # fixed height and the animation simply gets whatever space is left.
-    bottom_border_row = max_y - 1
-    footer_row = bottom_border_row - 1
-    footer_sep_row = footer_row - 1
-    telemetry_end_row = footer_sep_row - 1
-    telemetry_start_row = telemetry_end_row - TELEMETRY_LINES + 1
-    telemetry_header_row = telemetry_start_row - 1
-    anim_top = 4
-    anim_bottom = telemetry_header_row - 1
-    anim_height = max(0, anim_bottom - anim_top + 1)
+    layout = compute_layout(max_y)
+    footer_row = layout.footer_row
+    footer_sep_row = layout.footer_sep_row
+    telemetry_start_row = layout.telemetry_start_row
+    telemetry_header_row = layout.telemetry_header_row
+    anim_top = layout.anim_top
+    anim_height = layout.anim_height
 
     frame = None
     if anim_height >= 3 and content_width >= 20:
@@ -369,6 +427,12 @@ def _draw_dashboard(
         for hy, hx in frame.highlights:
             if 0 <= hy < len(frame.lines) and 0 <= hx < len(frame.lines[hy]):
                 rendering.safe_addstr(stdscr, anim_top + hy, 1 + hx, frame.lines[hy][hx], accent)
+        for (py, px), kind in frame.trail_cells.items():
+            if 0 <= py < len(frame.lines) and 0 <= px < len(frame.lines[py]):
+                pair = _PACKET_COLOR.get(kind, rendering.COLOR_PAIR_DIM)
+                rendering.safe_addstr(
+                    stdscr, anim_top + py, 1 + px, frame.lines[py][px], attr(pair)
+                )
         for (py, px), kind in frame.packet_cells.items():
             if 0 <= py < len(frame.lines) and 0 <= px < len(frame.lines[py]):
                 pair = _PACKET_COLOR.get(kind, rendering.COLOR_PAIR_ACCENT)
