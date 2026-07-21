@@ -11,9 +11,12 @@ Guards against two failure modes:
 from __future__ import annotations
 
 from command_center import rendering
-from command_center.activity import AIFlowPhase
+from command_center.activity import AIActivityState, AIFlowPhase, PaneObservation
 from command_center.animation import FORWARD, REVERSE, FlowPacket, PacketKind
 from command_center.app import _flow_debug_text
+
+ACTIVE_OBS = PaneObservation(active=True, changed_recently=True, active_seconds=5.0)
+IDLE_OBS = PaneObservation()
 
 DEBUG_ATTR = 0x1234
 COLOR_ATTR = 0x5678
@@ -63,14 +66,22 @@ def _sample_packets() -> list[FlowPacket]:
 
 
 def test_flow_debug_text_format() -> None:
-    text = _flow_debug_text(AIFlowPhase.PROCESSING, _sample_packets(), 3)
-    assert text == "FLOW: PROCESSING CPU=2 RAM=1 RESP=0 CELLS=3"
+    text = _flow_debug_text(
+        AIFlowPhase.PROCESSING, AIActivityState.ACTIVE, ACTIVE_OBS, _sample_packets(), 3
+    )
+    assert text == "FLOW: PROCESSING STATE:ACTIVE OBS:fresh CPU:2 RAM:1 RESP:0 IDLE:0 CELLS:3"
 
 
 def test_flow_debug_text_handles_missing_frame_and_response() -> None:
     packets = [FlowPacket(0.9, PacketKind.RESPONSE, REVERSE)]
-    text = _flow_debug_text(AIFlowPhase.RESPONSE, packets, None)
-    assert text == "FLOW: RESPONSE CPU=0 RAM=0 RESP=1 CELLS=-"
+    text = _flow_debug_text(AIFlowPhase.RESPONSE, AIActivityState.ACTIVE, ACTIVE_OBS, packets, None)
+    assert text == "FLOW: RESPONSE STATE:ACTIVE OBS:fresh CPU:0 RAM:0 RESP:1 IDLE:0 CELLS:-"
+
+
+def test_flow_debug_text_reports_stale_idle() -> None:
+    packets = [FlowPacket(0.2, PacketKind.IDLE, FORWARD)]
+    text = _flow_debug_text(AIFlowPhase.IDLE, AIActivityState.IDLE, IDLE_OBS, packets, 1)
+    assert text == "FLOW: IDLE STATE:IDLE OBS:stale CPU:0 RAM:0 RESP:0 IDLE:1 CELLS:1"
 
 
 def test_debug_overlay_does_not_leak_attributes() -> None:
@@ -78,7 +89,9 @@ def test_debug_overlay_does_not_leak_attributes() -> None:
 
     # Draw the debug overlay exactly the way the app does: one explicit
     # attribute passed directly to the draw call.
-    debug_text = _flow_debug_text(AIFlowPhase.PROCESSING, _sample_packets(), 3)
+    debug_text = _flow_debug_text(
+        AIFlowPhase.PROCESSING, AIActivityState.ACTIVE, ACTIVE_OBS, _sample_packets(), 3
+    )
     rendering.safe_addstr(screen, 4, 1, debug_text, DEBUG_ATTR)
 
     # A colored dashboard element drawn afterwards must receive its own
@@ -92,7 +105,9 @@ def test_debug_overlay_does_not_leak_attributes() -> None:
 
 def test_debug_overlay_clips_instead_of_wrapping() -> None:
     screen = FakeScreen(height=24, width=30)
-    debug_text = _flow_debug_text(AIFlowPhase.PROCESSING, _sample_packets(), 3)
+    debug_text = _flow_debug_text(
+        AIFlowPhase.PROCESSING, AIActivityState.ACTIVE, ACTIVE_OBS, _sample_packets(), 3
+    )
     rendering.safe_addstr(screen, 4, 1, debug_text, DEBUG_ATTR)
     (y, x, text, attr) = screen.calls[0]
     assert y == 4 and x == 1

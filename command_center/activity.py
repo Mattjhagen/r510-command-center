@@ -38,7 +38,13 @@ ACTIVE_MARKERS = (
     "working",
     "running tool",
     "esc interrupt",
+    "esc to interrupt",  # OpenCode's actual in-flight hint text
 )
+
+# A pane whose content changed within this many seconds counts as
+# active even without a recognized marker -- a working OpenCode TUI
+# redraws its spinner/status constantly, while an idle one is static.
+RECENT_CHANGE_SECONDS = 3.0
 
 # Subset of markers that indicate output is being produced (the reply
 # leg of the round trip) rather than the request being worked on.
@@ -77,6 +83,7 @@ class PaneObservation:
     active: bool = False
     response_marker: bool = False
     active_seconds: float = 0.0
+    changed_recently: bool = False
 
 
 def has_active_marker(pane: str, final_lines: int = FINAL_LINES) -> bool:
@@ -130,8 +137,10 @@ class ActivityMonitor:
     session: str
     poll_interval: float = POLL_INTERVAL
     stale_after: float = STALE_SECONDS
+    recent_window: float = RECENT_CHANGE_SECONDS
     _last_pane: Optional[str] = None
-    _last_change: Optional[float] = None
+    _content_since: Optional[float] = None
+    _last_seen_change: Optional[float] = None
     _next_poll: float = 0.0
     _opencode_active: bool = False
     _active_since: Optional[float] = None
@@ -142,19 +151,40 @@ class ActivityMonitor:
 
         Pure with respect to I/O -- callers (and tests) supply the
         capture and the clock. Returns whether OpenCode looks active.
+
+        Active means either of two observable signals:
+        - a recognized status marker in the final visible lines, no
+          older than ``stale_after`` (so frozen output stops matching);
+        - the pane content actually changed within ``recent_window``
+          (a working TUI redraws constantly; the very first capture is
+          a baseline, not a change).
         """
         if pane is None:
             self._last_pane = None
-            self._last_change = None
+            self._content_since = None
+            self._last_seen_change = None
             self._opencode_active = False
             self._active_since = None
             self._response_marker = False
             return False
-        if pane != self._last_pane:
+        if self._last_pane is None:
             self._last_pane = pane
-            self._last_change = now
-        fresh = self._last_change is not None and (now - self._last_change) <= self.stale_after
-        active = fresh and has_active_marker(pane)
+            self._content_since = now
+        elif pane != self._last_pane:
+            self._last_pane = pane
+            self._content_since = now
+            self._last_seen_change = now
+
+        marker_fresh = (
+            has_active_marker(pane)
+            and self._content_since is not None
+            and (now - self._content_since) <= self.stale_after
+        )
+        changed_recently = (
+            self._last_seen_change is not None
+            and (now - self._last_seen_change) <= self.recent_window
+        )
+        active = marker_fresh or changed_recently
         if active and not self._opencode_active:
             self._active_since = now
         elif not active:
@@ -174,10 +204,15 @@ class ActivityMonitor:
         active_seconds = 0.0
         if self._opencode_active and self._active_since is not None:
             active_seconds = max(0.0, now - self._active_since)
+        changed_recently = (
+            self._last_seen_change is not None
+            and (now - self._last_seen_change) <= self.recent_window
+        )
         return PaneObservation(
             active=self._opencode_active,
             response_marker=self._response_marker,
             active_seconds=active_seconds,
+            changed_recently=changed_recently,
         )
 
     def poll(self, now: float) -> bool:

@@ -7,7 +7,7 @@ packets stay inside the animation area.
 from __future__ import annotations
 
 from command_center import animation
-from command_center.activity import AIActivityState, AIFlowPhase
+from command_center.activity import AIActivityState, AIFlowPhase, PaneObservation
 from command_center.app import TELEMETRY_LINES, RuntimeState, _draw_dashboard, compute_layout
 from command_center.config import Config
 from command_center.ollama import OllamaStatus
@@ -66,6 +66,7 @@ def _draw(screen: FakeScreen, flow: AIFlowPhase = AIFlowPhase.IDLE) -> None:
         OllamaStatus(),
         AIActivityState.IDLE,
         flow,
+        PaneObservation(),
         None,
         "NONE",
         tick=9,

@@ -69,6 +69,24 @@ def test_missing_tmux_session_is_idle() -> None:
     assert derive_state(OllamaState.ONLINE, False) == AIActivityState.IDLE
 
 
+def test_markerless_changing_pane_is_active() -> None:
+    """A real OpenCode TUI may not show any recognized status word, but
+    it redraws constantly while working -- recent pane changes alone
+    must count as activity."""
+    monitor = ActivityMonitor(session="opencode")
+    assert monitor.update("spinner frame 1\n", now=0.0) is False  # baseline capture
+    assert monitor.update("spinner frame 2\n", now=1.0) is True
+    assert monitor.update("spinner frame 3\n", now=2.0) is True
+    # Pane goes static: activity drops once the change window passes.
+    assert monitor.update("spinner frame 3\n", now=10.0) is False
+
+
+def test_esc_to_interrupt_marker_matches() -> None:
+    pane = "opencode\n> do the thing\n  working  (esc to interrupt)\n"
+    monitor = ActivityMonitor(session="opencode")
+    assert monitor.update(pane, now=0.0) is True
+
+
 def test_cloud_model_activity_is_active() -> None:
     monitor = ActivityMonitor(session="opencode")
     opencode_active = monitor.update(CLOUD_MODEL_PANE, now=0.0)

@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from command_center.activity import (
+    ActivityMonitor,
     AIActivityState,
     AIFlowPhase,
     PaneObservation,
+    derive_state,
     flow_phase,
 )
+from command_center.ollama import OllamaState
 from command_center.animation import (
     FORWARD,
     REVERSE,
@@ -171,6 +174,56 @@ def test_flow_phase_mapping() -> None:
 
     replying = PaneObservation(active=True, response_marker=True, active_seconds=10.0)
     assert flow_phase(AIActivityState.ACTIVE, replying) == AIFlowPhase.RESPONSE
+
+
+def test_idle_packet_kind_only_in_idle_phase() -> None:
+    for phase in AIFlowPhase:
+        if phase == AIFlowPhase.IDLE:
+            continue
+        for tick in range(0, 120, 7):
+            packets = build_flow_packets(tick, phase, 60, 60, 5_000)
+            assert all(p.kind != PacketKind.IDLE for p in packets), phase
+
+
+def _pipeline(monitor: ActivityMonitor, pane: str, now: float):
+    """Run the full end-to-end phase pipeline exactly as app.run() does."""
+    active = monitor.update(pane, now)
+    state = derive_state(OllamaState.ONLINE, active)
+    obs = monitor.observation(now)
+    return flow_phase(state, obs)
+
+
+def test_pipeline_active_session_produces_cpu_ram_packets() -> None:
+    """tmux session exists, capture succeeds, pane changes recently,
+    activity is ACTIVE -> UPLOAD/PROCESSING with CPU+RAM packets and
+    zero IDLE packets."""
+    monitor = ActivityMonitor(session="opencode")
+    _pipeline(monitor, "opencode\n> task\n  spinner 1 (esc to interrupt)\n", 0.0)
+    phase = _pipeline(monitor, "opencode\n> task\n  spinner 2 (esc to interrupt)\n", 1.0)
+    assert phase == AIFlowPhase.UPLOAD
+
+    # Several seconds of sustained work settles into PROCESSING.
+    phase = _pipeline(monitor, "opencode\n> task\n  spinner 3 (esc to interrupt)\n", 4.0)
+    assert phase == AIFlowPhase.PROCESSING
+
+    kinds = [p.kind for p in build_flow_packets(30, phase, 50, 50)]
+    assert kinds.count(PacketKind.CPU) > 0
+    assert kinds.count(PacketKind.RAM) > 0
+    assert kinds.count(PacketKind.IDLE) == 0
+
+
+def test_pipeline_generation_marker_produces_green_reverse_packets() -> None:
+    """A visible generation marker -> RESPONSE phase, green packets
+    moving AI Core -> Earth, no idle packets."""
+    monitor = ActivityMonitor(session="opencode")
+    _pipeline(monitor, "opencode\n> task\n  Thinking...\n", 0.0)
+    phase = _pipeline(monitor, "opencode\n> task\n  Generating response\n", 3.0)
+    assert phase == AIFlowPhase.RESPONSE
+
+    packets = build_flow_packets(30, phase, 50, 50, 5_000)
+    assert packets
+    assert all(p.kind == PacketKind.RESPONSE for p in packets)
+    assert all(p.direction == REVERSE for p in packets)
 
 
 def test_flow_config_defaults_and_animation_table(tmp_path) -> None:

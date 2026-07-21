@@ -160,7 +160,8 @@ def run(stdscr, config: Config) -> None:
 
         opencode_active = activity_monitor.poll(now)
         ai_state = activity.derive_state(ollama_status.state, opencode_active)
-        flow_phase = activity.flow_phase(ai_state, activity_monitor.observation(now))
+        pane_obs = activity_monitor.observation(now)
+        flow_phase = activity.flow_phase(ai_state, pane_obs)
         tmux_state = _resolve_tmux_state(tmux_state_raw, activity_monitor.pane_seen)
 
         max_y, max_x = stdscr.getmaxyx()
@@ -177,6 +178,7 @@ def run(stdscr, config: Config) -> None:
                 ollama_status,
                 ai_state,
                 flow_phase,
+                pane_obs,
                 opencode_path,
                 tmux_state,
                 tick,
@@ -271,17 +273,22 @@ def _ai_activity_text(state: activity.AIActivityState, tick: int, ascii_only: bo
 
 def _flow_debug_text(
     phase: activity.AIFlowPhase,
+    ai_state: activity.AIActivityState,
+    obs: activity.PaneObservation,
     packets: list[animation.FlowPacket],
     cells: Optional[int],
 ) -> str:
-    """TEMPORARY DEBUG: one-line summary of the flow builder's output."""
+    """TEMPORARY DEBUG: one-line summary of the whole phase pipeline."""
     kinds = [p.kind for p in packets]
     return (
         f"FLOW: {phase.value}"
-        f" CPU={kinds.count(animation.PacketKind.CPU)}"
-        f" RAM={kinds.count(animation.PacketKind.RAM)}"
-        f" RESP={kinds.count(animation.PacketKind.RESPONSE)}"
-        f" CELLS={'-' if cells is None else cells}"
+        f" STATE:{ai_state.value}"
+        f" OBS:{'fresh' if obs.changed_recently else 'stale'}"
+        f" CPU:{kinds.count(animation.PacketKind.CPU)}"
+        f" RAM:{kinds.count(animation.PacketKind.RAM)}"
+        f" RESP:{kinds.count(animation.PacketKind.RESPONSE)}"
+        f" IDLE:{kinds.count(animation.PacketKind.IDLE)}"
+        f" CELLS:{'-' if cells is None else cells}"
     )
 
 
@@ -360,6 +367,7 @@ def _draw_dashboard(
     ollama_status: ollama.OllamaStatus,
     ai_state: activity.AIActivityState,
     flow_phase: activity.AIFlowPhase,
+    pane_obs: activity.PaneObservation,
     opencode_path: Optional[str],
     tmux_state: str,
     tick: int,
@@ -534,8 +542,10 @@ def _draw_dashboard(
         intensity=config.flow_intensity,
     )
     cells = len(frame.packet_cells) if frame is not None else None
-    debug_line = _flow_debug_text(flow_phase, debug_packets, cells)
-    debug_attr = attr(rendering.COLOR_PAIR_DIM)
+    debug_line = _flow_debug_text(flow_phase, ai_state, pane_obs, debug_packets, cells)
+    # Highly visible while diagnosing (amber, bold); still one explicit
+    # per-call attribute, still confined to the animation's top row.
+    debug_attr = attr(rendering.COLOR_PAIR_WARN, bold=True)
     rendering.safe_addstr(stdscr, anim_top, 1, debug_line[:content_width], debug_attr)
 
 
