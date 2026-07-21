@@ -24,7 +24,19 @@ MIN_HEIGHT = 20
 TARGET_FPS = 7
 FRAME_DELAY_MS = max(80, int(1000 / TARGET_FPS))
 SLOW_REFRESH_SECONDS = 3.0
-TELEMETRY_LINES = 8
+TELEMETRY_LINES = 9
+
+# Observable activity summary phases shown while Ollama is BUSY. These are
+# generic pipeline stages, not model output -- no prompts, responses, or
+# reasoning ever appear here.
+AI_BUSY_PHASES = (
+    "analyzing context",
+    "planning next action",
+    "evaluating tools",
+    "generating response",
+    "finalizing output",
+)
+AI_PHASE_TICKS = TARGET_FPS * 2  # rotate busy phases roughly every two seconds
 
 KEY_ACTIONS = {"o", "s", "l", "m", "r", "t", "n", "h", "?"}
 
@@ -183,6 +195,25 @@ def _handle_key(
         state.ascii_only = not state.ascii_only
         return None
     return None
+
+
+def _ai_activity_text(state: ollama.OllamaState, tick: int, ascii_only: bool) -> str:
+    """Short, observable AI activity summary for the telemetry footer row.
+
+    Pure function of the Ollama state and the animation tick. While BUSY it
+    slowly cycles through generic pipeline-stage phrases with a small
+    animated dot suffix; other states map to a single static phrase.
+    """
+    if state == ollama.OllamaState.BUSY:
+        phase = AI_BUSY_PHASES[(tick // AI_PHASE_TICKS) % len(AI_BUSY_PHASES)]
+        dot = "." if ascii_only else "·"
+        dots = dot * ((tick // 4) % 3 + 1)
+        return f"{phase} {dots}"
+    if state in (ollama.OllamaState.ONLINE, ollama.OllamaState.IDLE):
+        return "standing by for uplink"
+    if state == ollama.OllamaState.OFFLINE:
+        return "uplink offline"
+    return "telemetry unavailable"
 
 
 def _tmux_session_state(session: str) -> str:
@@ -351,6 +382,16 @@ def _draw_dashboard(
         row,
         f"UPTIME {format_uptime(telemetry.uptime_seconds)}  PROCS {telemetry.process_count}  USERS {users}",
         net_str,
+    )
+    row += 1
+
+    busy = ollama_status.state == ollama.OllamaState.BUSY
+    activity = _ai_activity_text(ollama_status.state, tick, ascii_only)
+    rendering.safe_addstr(stdscr, row, col1_x, "AI ACTIVITY", normal)
+    rendering.safe_addstr(
+        stdscr, row, col1_x + 13,
+        activity[: max(0, content_width - 13)],
+        attr(rendering.COLOR_PAIR_ACCENT) if busy else dim,
     )
 
     rendering.draw_hline(stdscr, footer_sep_row, 1, content_width, ascii_only, normal)
