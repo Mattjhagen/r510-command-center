@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "r510-command-center"
+version = "1.0.0"
+description = "A retro NASA-mission-control-style animated TTY dashboard for a local AI server (Ollama, OpenCode, tmux)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Matty Hagen" }]
+keywords = ["curses", "tty", "dashboard", "ollama", "opencode", "ascii", "terminal", "mission-control"]
+classifiers = [
+    "Environment :: Console :: Curses",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+    "Topic :: Terminals",
+]
+dependencies = [
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/Mattjhagen/r510-command-center"
+
+[project.scripts]
+command-center = "command_center.app:main"
+
+[tool.setuptools.packages.find]
+include = ["command_center*"]
