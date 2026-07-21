@@ -1,0 +1,9 @@
+Reference ASCII art used by command_center/animation.py (CORE_ART).
+Edit the CORE_ART list in that module to customize -- this file is a
+readable reference copy, not loaded at runtime.
+
+   .--------.
+  / AI  CORE \
+ +------------+
+  \  * ** *  /
+   '--------'

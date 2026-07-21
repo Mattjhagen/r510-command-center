@@ -1,0 +1,11 @@
+Reference ASCII art used by command_center/animation.py (EARTH_ART).
+Edit the EARTH_ART list in that module to customize -- this file is a
+readable reference copy, not loaded at runtime.
+
+     .:oOo:.
+   .oOOOOOOOo.
+  oOOO@@@OOOOOo
+  oOO@@@@@OOOoo
+  oOOOO@@OOOOOo
+   `oOOOOOOo'
+     `:oOo:'
