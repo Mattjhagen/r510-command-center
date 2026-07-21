@@ -225,6 +225,22 @@ def _ai_activity_text(state: activity.AIActivityState, tick: int, ascii_only: bo
     return "telemetry unavailable"
 
 
+def _flow_debug_text(
+    phase: activity.AIFlowPhase,
+    packets: list[animation.FlowPacket],
+    cells: Optional[int],
+) -> str:
+    """TEMPORARY DEBUG: one-line summary of the flow builder's output."""
+    kinds = [p.kind for p in packets]
+    return (
+        f"FLOW: {phase.value}"
+        f" CPU={kinds.count(animation.PacketKind.CPU)}"
+        f" RAM={kinds.count(animation.PacketKind.RAM)}"
+        f" RESP={kinds.count(animation.PacketKind.RESPONSE)}"
+        f" CELLS={'-' if cells is None else cells}"
+    )
+
+
 def _tmux_session_state(session: str) -> str:
     """One of ``ATTACHED``, ``DETACHED``, ``NONE``, or ``N/A``."""
     if shutil.which("tmux") is None:
@@ -440,6 +456,10 @@ def _draw_dashboard(
     # TEMPORARY DEBUG: mirror exactly what build_flow_packets() returns
     # this frame (same args render() uses -- it is pure/deterministic),
     # so a blank animation can be attributed to the builder or renderer.
+    # Drawn inside the animation area (over star field only) with one
+    # explicit per-call attribute -- never attrset()/attron()/bkgdset()
+    # -- so it cannot leak attributes into the rest of the dashboard,
+    # and never overwrites the border or the command bar.
     debug_packets = animation.build_flow_packets(
         tick,
         flow_phase,
@@ -449,16 +469,10 @@ def _draw_dashboard(
         max_packets=1 if state.reduced_motion else config.max_flow_packets,
         intensity=config.flow_intensity,
     )
-    kinds = [p.kind for p in debug_packets]
-    cells = len(frame.packet_cells) if frame is not None else "-"
-    debug_line = (
-        f"FLOW: {flow_phase.value}"
-        f" CPU={kinds.count(animation.PacketKind.CPU)}"
-        f" RAM={kinds.count(animation.PacketKind.RAM)}"
-        f" RESP={kinds.count(animation.PacketKind.RESPONSE)}"
-        f" CELLS={cells}"
-    )
-    rendering.safe_addstr(stdscr, bottom_border_row, 2, debug_line[: content_width - 2], dim)
+    cells = len(frame.packet_cells) if frame is not None else None
+    debug_line = _flow_debug_text(flow_phase, debug_packets, cells)
+    debug_attr = attr(rendering.COLOR_PAIR_DIM)
+    rendering.safe_addstr(stdscr, anim_top, 1, debug_line[:content_width], debug_attr)
 
 
 if __name__ == "__main__":
