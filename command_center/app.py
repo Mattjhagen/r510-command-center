@@ -326,6 +326,7 @@ def _draw_dashboard(
     anim_bottom = telemetry_header_row - 1
     anim_height = max(0, anim_bottom - anim_top + 1)
 
+    frame = None
     if anim_height >= 3 and content_width >= 20:
         frame = animation.render(
             content_width,
@@ -435,6 +436,29 @@ def _draw_dashboard(
         "[N]Net [P]Pause [C]Color [A]ASCII [H]Help [Q]Exit"
     )
     rendering.safe_addstr(stdscr, footer_row, 1, keybar[:content_width], dim)
+
+    # TEMPORARY DEBUG: mirror exactly what build_flow_packets() returns
+    # this frame (same args render() uses -- it is pure/deterministic),
+    # so a blank animation can be attributed to the builder or renderer.
+    debug_packets = animation.build_flow_packets(
+        tick,
+        flow_phase,
+        telemetry.cpu_percent,
+        telemetry.ram_percent,
+        telemetry.net_rx_bytes_per_sec + telemetry.net_tx_bytes_per_sec,
+        max_packets=1 if state.reduced_motion else config.max_flow_packets,
+        intensity=config.flow_intensity,
+    )
+    kinds = [p.kind for p in debug_packets]
+    cells = len(frame.packet_cells) if frame is not None else "-"
+    debug_line = (
+        f"FLOW: {flow_phase.value}"
+        f" CPU={kinds.count(animation.PacketKind.CPU)}"
+        f" RAM={kinds.count(animation.PacketKind.RAM)}"
+        f" RESP={kinds.count(animation.PacketKind.RESPONSE)}"
+        f" CELLS={cells}"
+    )
+    rendering.safe_addstr(stdscr, bottom_border_row, 2, debug_line[: content_width - 2], dim)
 
 
 if __name__ == "__main__":
