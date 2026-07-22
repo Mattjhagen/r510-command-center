@@ -7,7 +7,7 @@ packets stay inside the animation area.
 from __future__ import annotations
 
 from command_center import animation
-from command_center.activity import AIActivityState, AIFlowPhase, PaneObservation
+from command_center.activity import AIActivityState, AIFlowPhase
 from command_center.app import TELEMETRY_LINES, RuntimeState, _draw_dashboard, compute_layout
 from command_center.config import Config
 from command_center.ollama import OllamaStatus
@@ -66,7 +66,6 @@ def _draw(screen: FakeScreen, flow: AIFlowPhase = AIFlowPhase.IDLE) -> None:
         OllamaStatus(),
         AIActivityState.IDLE,
         flow,
-        PaneObservation(),
         None,
         "NONE",
         tick=9,
@@ -98,15 +97,11 @@ def test_bottom_telemetry_rows_and_contents_unchanged() -> None:
     assert "[Q]Exit" in footer and "[O]OpenCode" in footer
 
 
-def test_nothing_extra_drawn_between_telemetry_and_border() -> None:
-    # The debug overlay and packets must never land on telemetry, the
-    # footer separator, the command bar, or the borders.
+def test_debug_overlay_is_gone() -> None:
+    # The temporary FLOW diagnostic row was removed; nothing may draw it.
     screen = FakeScreen()
     _draw(screen, flow=AIFlowPhase.PROCESSING)
-    layout = compute_layout(24)
-
-    debug_rows = [y for (y, _x, text, _a) in screen.calls if text.startswith("FLOW:")]
-    assert debug_rows == [layout.anim_top]
+    assert not any(text.startswith("FLOW:") for (_y, _x, text, _a) in screen.calls)
 
 
 def test_packet_cells_stay_inside_animation_bounds() -> None:
