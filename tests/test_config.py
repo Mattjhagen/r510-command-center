@@ -38,6 +38,9 @@ def test_load_config_overrides_known_fields(tmp_path: Path) -> None:
         refresh_interval = 2.5
         color_mode = false
         ascii_only = true
+        fly_app_name = "other-fly-app"
+        fly_refresh_seconds = 45
+        fly_log_lines = 50
         """
     )
     config = load_config(config_file)
@@ -46,6 +49,9 @@ def test_load_config_overrides_known_fields(tmp_path: Path) -> None:
     assert config.refresh_interval == 2.5
     assert config.color_mode is False
     assert config.ascii_only is True
+    assert config.fly_app_name == "other-fly-app"
+    assert config.fly_refresh_seconds == 45.0
+    assert config.fly_log_lines == 50
     # Untouched fields keep their defaults.
     assert config.ollama_host == "127.0.0.1"
     assert config.tmux_session == "opencode"

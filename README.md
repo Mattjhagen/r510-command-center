@@ -87,7 +87,7 @@ read live from the system.
   only -- never chain-of-thought or model internals.
 - OpenCode integration: auto-detects the OpenCode executable and manages
   a dedicated `tmux` session for it.
-- Keyboard-driven hotkeys for a shell, logs, model list, service restart,
+- Keyboard-driven hotkeys for a shell, Ollama logs, Fly application logs, model list, service restart,
   `htop`, network info, and a help screen.
 - Reduced-motion and ASCII-only modes for accessibility, low-bandwidth
   SSH links, or terminals without Unicode support.
@@ -272,6 +272,12 @@ ascii_only = false
 default_screen = "dashboard"
 autostart_tty1 = false
 
+# Leave blank to disable Fly monitoring. Authentication is supplied by flyctl
+# or the FLY_ACCESS_TOKEN environment variable -- never put a token here.
+fly_app_name = "archon-ide-pacmac"
+fly_refresh_seconds = 30.0
+fly_log_lines = 120
+
 [animation]
 # Colored resource-flow packets on the Earth <-> AI Core uplink.
 resource_flow = true
@@ -297,6 +303,9 @@ flow_intensity = "subtle"
 | `resource_flow`    | `true`                           | Colored resource packets on the uplink path.                |
 | `max_flow_packets` | `5`                              | Upper bound on simultaneously visible flow packets.         |
 | `flow_intensity`   | `subtle`                         | Packet density: `subtle`, `normal`, or `vivid`.             |
+| `fly_app_name`     | `archon-ide-pacmac`              | Fly application checked for recent runtime errors.           |
+| `fly_refresh_seconds` | `30.0`                        | Seconds between bounded Fly log snapshots.                   |
+| `fly_log_lines`    | `120`                            | Maximum recent Fly lines retained in the dashboard.          |
 
 The `[animation]` keys may also be written at the top level; existing
 config files without them keep working unchanged.
@@ -311,6 +320,7 @@ the dashboard never fails to start because of a bad config.
 | `O`      | Open or attach the OpenCode tmux session                     |
 | `S`      | Open an interactive Bash shell                                |
 | `L`      | View recent Ollama logs (`journalctl -u ollama`, scrollable)  |
+| `F`      | View recent Fly logs for the configured application           |
 | `M`      | View installed Ollama models                                  |
 | `R`      | Restart the Ollama service (confirmation required)            |
 | `T`      | Open `htop`                                                    |
@@ -337,6 +347,10 @@ the dashboard never fails to start because of a bad config.
 - **`OPENCODE MISSING`** -- OpenCode wasn't found via `PATH`,
   `~/.opencode/bin`, or `~/.local/bin`. Install it, or set
   `opencode_path` explicitly in `config.toml`.
+- **`FLY ARCHON UNAVAILABLE`** -- install [`flyctl`](https://fly.io/docs/flyctl/)
+  on the server and authenticate with `flyctl auth login`, or provide a
+  `FLY_ACCESS_TOKEN` environment variable to the command-center process. The
+  dashboard never stores the token in its configuration file.
 - **`command-center: command not found`** -- open a new shell (or `source
   ~/.bashrc`) so the `PATH` update from `install.sh` takes effect.
 - **No temperature shown** -- not every system exposes sensors `psutil`

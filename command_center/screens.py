@@ -11,6 +11,7 @@ import subprocess
 
 from . import rendering
 from .config import Config
+from .fly import FlyStatus
 from .ollama import OllamaStatus
 from .telemetry import Telemetry, format_rate
 
@@ -34,6 +35,7 @@ def show_help(stdscr, config: Config) -> None:
         "  O        Open or attach the OpenCode tmux session",
         "  S        Open an interactive shell",
         "  L        View recent Ollama logs (journalctl -u ollama)",
+        "  F        View recent Fly logs for the configured application",
         "  M        View installed Ollama models",
         "  R        Restart the Ollama service (confirmation required)",
         "  T        Open htop",
@@ -143,6 +145,51 @@ def show_logs(stdscr, config: Config, lines: int = 200) -> None:
             2,
             f"Line {offset + 1}-{min(offset + view_height, len(log_lines))} of {len(log_lines)}"
             " -- Up/Down/PgUp/PgDn to scroll, ESC or Q to return.",
+        )
+        stdscr.refresh()
+
+        key = stdscr.getch()
+        if key in EXIT_KEYS:
+            return
+        if key in (curses.KEY_DOWN, ord("j")):
+            offset = min(max_offset, offset + 1)
+        elif key in (curses.KEY_UP, ord("k")):
+            offset = max(0, offset - 1)
+        elif key == curses.KEY_NPAGE:
+            offset = min(max_offset, offset + view_height)
+        elif key == curses.KEY_PPAGE:
+            offset = max(0, offset - view_height)
+        elif key == curses.KEY_RESIZE:
+            return
+
+
+def show_fly_logs(stdscr, status: FlyStatus) -> None:
+    """Show the latest cached Fly snapshot with the normal scrolling controls."""
+    stdscr.erase()
+    max_y, max_x = stdscr.getmaxyx()
+    title = f"Fly Logs — {status.app_name or 'monitoring disabled'}"
+    rendering.safe_addstr(stdscr, 0, 2, title, curses.A_BOLD)
+
+    log_lines = status.lines or [status.summary]
+    view_height = max(1, max_y - 3)
+    offset = max(0, len(log_lines) - view_height)
+    max_offset = max(0, len(log_lines) - view_height)
+
+    stdscr.nodelay(False)
+    stdscr.timeout(-1)
+    while True:
+        for row in range(view_height):
+            rendering.safe_addstr(stdscr, 2 + row, 0, " " * max(0, max_x - 1))
+        for row in range(view_height):
+            idx = offset + row
+            if idx >= len(log_lines):
+                break
+            rendering.safe_addstr(stdscr, 2 + row, 2, log_lines[idx][: max(0, max_x - 4)])
+        rendering.safe_addstr(
+            stdscr,
+            max_y - 1,
+            2,
+            f"{status.summary} — Up/Down/PgUp/PgDn to scroll, ESC or Q to return.",
         )
         stdscr.refresh()
 

@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from . import actions, activity, animation, ollama, rendering, screens
+from . import actions, activity, animation, fly, ollama, rendering, screens
 from .config import Config, find_opencode_executable, load_config
 from .telemetry import Telemetry, TelemetryCollector, format_rate, format_uptime
 
@@ -24,7 +24,7 @@ MIN_HEIGHT = 20
 TARGET_FPS = 7
 FRAME_DELAY_MS = max(80, int(1000 / TARGET_FPS))
 SLOW_REFRESH_SECONDS = 3.0
-TELEMETRY_LINES = 9
+TELEMETRY_LINES = 10
 
 # Observable activity summary phases shown while AI work is detected as
 # ACTIVE. These are generic pipeline stages, not model output -- no
@@ -38,7 +38,7 @@ AI_BUSY_PHASES = (
 )
 AI_PHASE_TICKS = TARGET_FPS * 2  # rotate busy phases roughly every two seconds
 
-KEY_ACTIONS = {"o", "s", "l", "m", "r", "t", "n", "h", "?"}
+KEY_ACTIONS = {"o", "s", "l", "f", "m", "r", "t", "n", "h", "?"}
 
 
 @dataclass(frozen=True)
@@ -144,9 +144,11 @@ def run(stdscr, config: Config) -> None:
     tmux_state = tmux_state_raw = "NONE"
     activity_monitor = activity.ActivityMonitor(config.tmux_session)
     ai_state = activity.AIActivityState.IDLE
+    fly_status = fly.FlyStatus(app_name=config.fly_app_name)
 
     tick = 0
     next_slow_refresh = 0.0
+    next_fly_refresh = 0.0
 
     while True:
         telemetry = telemetry_collector.collect()
@@ -157,6 +159,10 @@ def run(stdscr, config: Config) -> None:
             opencode_path = find_opencode_executable(config)
             tmux_state_raw = _tmux_session_state(config.tmux_session)
             next_slow_refresh = now + SLOW_REFRESH_SECONDS
+
+        if now >= next_fly_refresh:
+            fly_status = fly.get_status(config.fly_app_name, config.fly_log_lines)
+            next_fly_refresh = now + max(5.0, config.fly_refresh_seconds)
 
         opencode_active = activity_monitor.poll(now)
         ai_state = activity.derive_state(ollama_status.state, opencode_active)
@@ -180,6 +186,7 @@ def run(stdscr, config: Config) -> None:
                 flow_phase,
                 opencode_path,
                 tmux_state,
+                fly_status,
                 tick,
                 color_available,
             )
@@ -188,7 +195,7 @@ def run(stdscr, config: Config) -> None:
 
         key = stdscr.getch()
         if key != -1:
-            outcome = _handle_key(stdscr, key, config, state, telemetry, ollama_status)
+            outcome = _handle_key(stdscr, key, config, state, telemetry, ollama_status, fly_status)
             stdscr.keypad(True)
             stdscr.timeout(FRAME_DELAY_MS)
             if outcome == "quit":
@@ -207,6 +214,7 @@ def _handle_key(
     state: RuntimeState,
     telemetry: Telemetry,
     ollama_status: ollama.OllamaStatus,
+    fly_status: fly.FlyStatus,
 ) -> Optional[str]:
     """Dispatch a keypress. Returns ``"quit"``, ``"refresh"``, or ``None``."""
     ch = chr(key) if 0 <= key < 256 else ""
@@ -222,6 +230,9 @@ def _handle_key(
         return "refresh"
     if lower == "l":
         screens.show_logs(stdscr, config)
+        return None
+    if lower == "f":
+        screens.show_fly_logs(stdscr, fly_status)
         return None
     if lower == "m":
         screens.show_models(stdscr, config, ollama_status)
@@ -336,6 +347,14 @@ _OLLAMA_COLOR = {
     ollama.OllamaState.ERROR: rendering.COLOR_PAIR_BAD,
 }
 
+_FLY_COLOR = {
+    fly.FlyState.ONLINE: rendering.COLOR_PAIR_GOOD,
+    fly.FlyState.WARN: rendering.COLOR_PAIR_WARN,
+    fly.FlyState.ERROR: rendering.COLOR_PAIR_BAD,
+    fly.FlyState.UNAVAILABLE: rendering.COLOR_PAIR_WARN,
+    fly.FlyState.DISABLED: rendering.COLOR_PAIR_DIM,
+}
+
 
 def _draw_dashboard(
     stdscr,
@@ -347,6 +366,7 @@ def _draw_dashboard(
     flow_phase: activity.AIFlowPhase,
     opencode_path: Optional[str],
     tmux_state: str,
+    fly_status: fly.FlyStatus,
     tick: int,
     color_available: bool,
 ) -> None:
@@ -485,6 +505,12 @@ def _draw_dashboard(
     )
     row += 1
 
+    fly_attr = attr(_FLY_COLOR.get(fly_status.state, rendering.COLOR_PAIR_DIM), bold=True)
+    rendering.safe_addstr(stdscr, row, col1_x, "FLY ARCHON", normal)
+    rendering.safe_addstr(stdscr, row, col1_x + 11, fly_status.state.value, fly_attr)
+    rendering.safe_addstr(stdscr, row, col2_x, fly_status.summary[:col_width], normal)
+    row += 1
+
     ai_active = ai_state == activity.AIActivityState.ACTIVE
     activity_text = _ai_activity_text(ai_state, tick, ascii_only)
     rendering.safe_addstr(stdscr, row, col1_x, "AI ACTIVITY", normal)
@@ -496,8 +522,8 @@ def _draw_dashboard(
 
     rendering.draw_hline(stdscr, footer_sep_row, 1, content_width, ascii_only, normal)
     keybar = (
-        "[O]OpenCode [S]Shell [L]Logs [M]Models [R]Restart [T]Top "
-        "[N]Net [P]Pause [C]Color [A]ASCII [H]Help [Q]Exit"
+        "[O]OpenCode [S]Shell [L]Logs [F]Fly [M]Models [R]Restart [T] "
+        "[N] [P]ause [C]olor [A]SCII [H]Help [Q]Exit"
     )
     rendering.safe_addstr(stdscr, footer_row, 1, keybar[:content_width], dim)
 

@@ -10,6 +10,7 @@ from command_center import animation
 from command_center.activity import AIActivityState, AIFlowPhase
 from command_center.app import TELEMETRY_LINES, RuntimeState, _draw_dashboard, compute_layout
 from command_center.config import Config
+from command_center.fly import FlyStatus
 from command_center.ollama import OllamaStatus
 from command_center.telemetry import Telemetry
 
@@ -38,11 +39,11 @@ def test_compute_layout_80x24() -> None:
     assert layout.footer_row == 22
     assert layout.footer_sep_row == 21
     assert layout.telemetry_end_row == 20
-    assert layout.telemetry_start_row == 12
-    assert layout.telemetry_header_row == 11
+    assert layout.telemetry_start_row == 11
+    assert layout.telemetry_header_row == 10
     assert layout.anim_top == 4
-    assert layout.anim_bottom == 10
-    assert layout.anim_height == 7
+    assert layout.anim_bottom == 9
+    assert layout.anim_height == 6
     assert layout.telemetry_end_row - layout.telemetry_start_row + 1 == TELEMETRY_LINES
 
 
@@ -68,6 +69,7 @@ def _draw(screen: FakeScreen, flow: AIFlowPhase = AIFlowPhase.IDLE) -> None:
         flow,
         None,
         "NONE",
+        FlyStatus(),
         tick=9,
         color_available=False,
     )
@@ -91,10 +93,11 @@ def test_bottom_telemetry_rows_and_contents_unchanged() -> None:
     assert "OPENCODE" in rows[5] and "TMUX" in rows[5]
     assert "HOST r510" in rows[6] and "IP 192.168.0.169" in rows[6]
     assert "UPTIME" in rows[7] and "NET rx" in rows[7]
-    assert "AI ACTIVITY" in rows[8]
+    assert "FLY ARCHON" in rows[8]
+    assert "AI ACTIVITY" in rows[9]
 
     footer = screen.row_text(layout.footer_row)
-    assert "[Q]Exit" in footer and "[O]OpenCode" in footer
+    assert "[Q]Exit" in footer and "[O]OpenCode" in footer and "[F]Fly" in footer
 
 
 def test_debug_overlay_is_gone() -> None:

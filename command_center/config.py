@@ -23,6 +23,9 @@ DEFAULT_TMUX_SESSION = "opencode"
 DEFAULT_REFRESH_INTERVAL = 1.0
 DEFAULT_ANIMATION_SPEED = 1.0
 DEFAULT_SCREEN = "dashboard"
+DEFAULT_FLY_APP_NAME = "archon-ide-pacmac"
+DEFAULT_FLY_REFRESH_SECONDS = 30.0
+DEFAULT_FLY_LOG_LINES = 120
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,9 @@ class Config:
     resource_flow: bool = True
     max_flow_packets: int = 5
     flow_intensity: str = "subtle"
+    fly_app_name: str = DEFAULT_FLY_APP_NAME
+    fly_refresh_seconds: float = DEFAULT_FLY_REFRESH_SECONDS
+    fly_log_lines: int = DEFAULT_FLY_LOG_LINES
 
     @property
     def ollama_base_url(self) -> str:
@@ -156,6 +162,13 @@ resource_flow = true
 max_flow_packets = 5
 # One of: "subtle", "normal", "vivid"
 flow_intensity = "subtle"
+
+# Fly.io monitoring is optional. Leave fly_app_name blank to disable it.
+# Authentication comes from flyctl's normal login or FLY_ACCESS_TOKEN; do not
+# store an access token in this file.
+fly_app_name = "archon-ide-pacmac"
+fly_refresh_seconds = 30.0
+fly_log_lines = 120
 """
 
 
