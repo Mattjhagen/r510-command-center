@@ -26,6 +26,10 @@ DEFAULT_SCREEN = "dashboard"
 DEFAULT_FLY_APP_NAME = "archon-ide-pacmac"
 DEFAULT_FLY_REFRESH_SECONDS = 30.0
 DEFAULT_FLY_LOG_LINES = 120
+DEFAULT_SHAGGOTH_HOST = "127.0.0.1"
+DEFAULT_SHAGGOTH_PORT = 8420
+DEFAULT_SHAGGOTH_SERVICE = "shaggoth"
+DEFAULT_SHAGGOTH_REFRESH_SECONDS = 4.0
 
 
 @dataclass(frozen=True)
@@ -48,13 +52,22 @@ class Config:
     resource_flow: bool = True
     max_flow_packets: int = 5
     flow_intensity: str = "subtle"
+    aliens: bool = True
     fly_app_name: str = DEFAULT_FLY_APP_NAME
     fly_refresh_seconds: float = DEFAULT_FLY_REFRESH_SECONDS
     fly_log_lines: int = DEFAULT_FLY_LOG_LINES
+    shaggoth_host: str = DEFAULT_SHAGGOTH_HOST
+    shaggoth_port: int = DEFAULT_SHAGGOTH_PORT
+    shaggoth_service: str = DEFAULT_SHAGGOTH_SERVICE
+    shaggoth_refresh_seconds: float = DEFAULT_SHAGGOTH_REFRESH_SECONDS
 
     @property
     def ollama_base_url(self) -> str:
         return f"http://{self.ollama_host}:{self.ollama_port}"
+
+    @property
+    def shaggoth_base_url(self) -> str:
+        return f"http://{self.shaggoth_host}:{self.shaggoth_port}"
 
 
 def _coerce(value: Any, default: Any) -> Any:
@@ -163,6 +176,9 @@ resource_flow = true
 max_flow_packets = 5
 # One of: "subtle", "normal", "vivid"
 flow_intensity = "subtle"
+# Two aliens narrate what Shaggoth is learning, from real telemetry.
+# They stay inside the animation area. Set false for a serious console.
+aliens = true
 
 # Fly.io monitoring is optional. Leave fly_app_name blank to disable it.
 # Authentication comes from flyctl's normal login or FLY_ACCESS_TOKEN; do not
@@ -170,6 +186,14 @@ flow_intensity = "subtle"
 fly_app_name = "archon-ide-pacmac"
 fly_refresh_seconds = 30.0
 fly_log_lines = 120
+
+# Shaggoth is the self-hosted AI running on this box. The dashboard polls its
+# HTTP API for a live learning counter (topics / words / research episodes).
+# Point this at another node to watch a remote Shaggoth instead.
+shaggoth_host = "127.0.0.1"
+shaggoth_port = 8420
+shaggoth_service = "shaggoth"
+shaggoth_refresh_seconds = 4.0
 """
 
 

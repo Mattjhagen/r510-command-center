@@ -77,6 +77,13 @@ class ShaggothStatus:
     scrape_errors: int = 0
     last_scrape_error: str = ""
 
+    # Topic name -> word count, for every entry in the knowledge base. Used
+    # to diff successive samples into an ingestion feed.
+    topics: dict = field(default_factory=dict)
+    last_episode_id: str = ""
+    last_episode_topic: str = ""
+    last_episode_words: int = 0
+
     @property
     def is_up(self) -> bool:
         return self.state not in (ShaggothState.OFFLINE, ShaggothState.ERROR)
@@ -94,6 +101,291 @@ class ShaggothStatus:
         if self.is_researching and self.current_topic:
             return f"researching {self.current_topic}"
         return f"{self.knowledge_entries} topics · {self.total_words:,} words"
+
+
+@dataclass
+class LearningCounter:
+    """Tracks knowledge-base growth across dashboard refreshes.
+
+    The dashboard's job is to make learning *visible*, so a bare total is
+    not enough -- 307 topics looks identical whether the loop is working or
+    dead. This records a baseline on the first healthy sample and reports
+    everything gained since, plus a short "just grew" pulse the renderer
+    uses to highlight the counter the moment a research episode lands.
+
+    Offline samples are ignored rather than treated as zero, so a restart
+    or a momentarily unreachable daemon cannot fake a huge negative delta.
+    If the totals genuinely shrink (a rebuilt or pruned knowledge base) the
+    baseline is quietly reset instead of reporting a negative gain.
+    """
+
+    baseline_entries: Optional[int] = None
+    baseline_words: Optional[int] = None
+    baseline_episodes: Optional[int] = None
+
+    entries: int = 0
+    words: int = 0
+    episodes: int = 0
+    last_growth_at: Optional[float] = None
+
+    def update(self, status: "ShaggothStatus", now: Optional[float] = None) -> None:
+        """Fold a fresh status sample into the counter."""
+        if not status.is_up:
+            return
+
+        import time
+
+        now = time.time() if now is None else now
+
+        if self.baseline_entries is None:
+            self.baseline_entries = status.knowledge_entries
+            self.baseline_words = status.total_words
+            self.baseline_episodes = status.total_episodes
+        elif (
+            status.knowledge_entries < self.baseline_entries
+            or status.total_words < (self.baseline_words or 0)
+        ):
+            # Knowledge base shrank -- rebuilt, pruned, or pointed at new
+            # data. Re-baseline rather than report a negative gain.
+            self.baseline_entries = status.knowledge_entries
+            self.baseline_words = status.total_words
+            self.baseline_episodes = status.total_episodes
+
+        grew = (
+            status.knowledge_entries > self.entries
+            or status.total_words > self.words
+            or status.total_episodes > self.episodes
+        )
+
+        self.entries = status.knowledge_entries
+        self.words = status.total_words
+        self.episodes = status.total_episodes
+
+        if grew:
+            self.last_growth_at = now
+
+    @property
+    def gained_entries(self) -> int:
+        return max(0, self.entries - (self.baseline_entries or 0))
+
+    @property
+    def gained_words(self) -> int:
+        return max(0, self.words - (self.baseline_words or 0))
+
+    @property
+    def gained_episodes(self) -> int:
+        return max(0, self.episodes - (self.baseline_episodes or 0))
+
+    def is_pulsing(self, now: Optional[float] = None, window: float = 30.0) -> bool:
+        """True for ``window`` seconds after the counters last moved."""
+        if self.last_growth_at is None:
+            return False
+        import time
+
+        now = time.time() if now is None else now
+        return (now - self.last_growth_at) <= window
+
+
+def format_delta(value: int) -> str:
+    """Render a session gain as ``" (+12)"``, or empty when nothing grew."""
+    return f" (+{value:,})" if value > 0 else ""
+
+
+MAX_FEED_EVENTS = 40
+
+
+@dataclass
+class LearningFeed:
+    """A rolling log of ingestion events, diffed out of status samples.
+
+    Shaggoth has no event stream -- it only reports totals -- so "what did
+    it just learn?" has to be recovered by comparing successive snapshots.
+    Each poll, any topic name that was not in the previous sample becomes a
+    feed line, as does a finished research episode or a new scrape error.
+
+    The first sample only establishes the baseline: without that guard the
+    feed would open with one line per existing topic (307 of them) and the
+    ticker would spend its first several minutes replaying old news.
+    """
+
+    events: list = field(default_factory=list)
+    known_topics: set = field(default_factory=set)
+    seeded: bool = False
+    last_episode_id: str = ""
+    scrape_errors: int = 0
+
+    def observe(self, status: "ShaggothStatus") -> list:
+        """Fold in a status sample; returns the events newly appended."""
+        if not status.is_up:
+            return []
+
+        new_events: list = []
+        topics = status.topics or {}
+
+        if not self.seeded:
+            self.seeded = True
+            self.known_topics = set(topics)
+            self.last_episode_id = status.last_episode_id
+            self.scrape_errors = status.scrape_errors
+            count = status.knowledge_entries or len(topics)
+            new_events.append(
+                f"[{count}] BASE  knowledge base online: "
+                f"{count:,} topics, {status.total_words:,} words ingested"
+            )
+        else:
+            index = len(self.known_topics)
+            for name in sorted(set(topics) - self.known_topics):
+                index += 1
+                words = topics.get(name, 0)
+                new_events.append(f"[{index}] OK   {name}: {words:,} words")
+            self.known_topics |= set(topics)
+
+            if status.last_episode_id and status.last_episode_id != self.last_episode_id:
+                self.last_episode_id = status.last_episode_id
+                topic = status.last_episode_topic or "unknown topic"
+                new_events.append(
+                    f"[*] RESEARCH  {topic}: {status.last_episode_words:,} words learned"
+                )
+
+            if status.scrape_errors > self.scrape_errors:
+                delta = status.scrape_errors - self.scrape_errors
+                self.scrape_errors = status.scrape_errors
+                detail = status.last_scrape_error or "unknown error"
+                new_events.append(f"[!] FAIL  {delta} scrape error(s): {detail}")
+
+        if status.is_researching and status.current_topic:
+            marker = f"[~] LIVE  researching {status.current_topic}"
+            if marker not in self.events[-1:]:
+                new_events.append(marker)
+
+        self.events.extend(new_events)
+        if len(self.events) > MAX_FEED_EVENTS:
+            del self.events[: len(self.events) - MAX_FEED_EVENTS]
+        return new_events
+
+
+def marquee_text(events, prompt: str = "matt@r510:~$ ", separator: str = "   ") -> str:
+    """Join feed events into the single line the ticker scrolls.
+
+    Rendered shell-style, deliberately: the point is that the box looks
+    like it is mid-ingestion, which is exactly what it is.
+    """
+    if not events:
+        return ""
+    return prompt + separator.join(events)
+
+
+EARTH_ALIEN = 0
+SATELLITE_ALIEN = 1
+
+
+def alien_script(status: "ShaggothStatus", counter: "LearningCounter", feed=None) -> list:
+    """Build the two aliens' running commentary from real telemetry.
+
+    Returns ``(speaker, line)`` pairs, alternating between the Earth alien
+    (``0``) and the satellite alien (``1``). Every line is derived from a
+    number the dashboard is already showing, so the bit stays honest --
+    if the aliens are talking about 307 topics, there are 307 topics.
+
+    Falls back to a short offline exchange rather than an empty script, so
+    the scene never goes silent when Shaggoth is down.
+    """
+    if not status.is_up:
+        return [
+            (EARTH_ALIEN, "it's not answering."),
+            (SATELLITE_ALIEN, status.detail or "no signal at all."),
+            (EARTH_ALIEN, "did you try turning the r510 off and on."),
+            (SATELLITE_ALIEN, "i am not touching that machine."),
+        ]
+
+    lines: list = []
+
+    if status.is_researching and status.current_topic:
+        topic = status.current_topic
+        lines += [
+            (EARTH_ALIEN, f"it's reading about {topic}. nobody asked."),
+            (SATELLITE_ALIEN, f"{topic}. voluntarily. on a saturday."),
+        ]
+
+    if feed is not None and feed.events:
+        newest = feed.events[-1]
+        # Feed lines look like "[42] OK   Photosynthesis: 2,388 words".
+        subject = newest.split("  ", 1)[-1].strip() if "  " in newest else newest
+        lines.append((EARTH_ALIEN, f"latest ingest: {subject}"))
+        lines.append((SATELLITE_ALIEN, "cool. still can't hold a conversation."))
+
+    lines += [
+        (EARTH_ALIEN, f"{status.knowledge_entries:,} topics known."),
+        (SATELLITE_ALIEN, f"{status.total_words:,} words in. zero opinions out."),
+    ]
+
+    if counter.gained_entries:
+        lines += [
+            (EARTH_ALIEN, f"+{counter.gained_entries} topics since you sat down."),
+            (SATELLITE_ALIEN, "learning faster than it is explaining."),
+        ]
+    else:
+        lines += [
+            (EARTH_ALIEN, "nothing new since you sat down."),
+            (SATELLITE_ALIEN, "it's thinking. allegedly."),
+        ]
+
+    if status.total_episodes == 0:
+        lines += [
+            (EARTH_ALIEN, "zero research runs. ever."),
+            (SATELLITE_ALIEN, "the curiosity loop is a rumour."),
+        ]
+    else:
+        plural = "" if status.total_episodes == 1 else "s"
+        lines += [
+            (EARTH_ALIEN, f"{status.total_episodes} research run{plural} on record."),
+            (SATELLITE_ALIEN, "it went and looked something up. unprompted."),
+        ]
+
+    if status.scrape_errors:
+        detail = status.last_scrape_error or "something refused it"
+        lines += [
+            (EARTH_ALIEN, f"{status.scrape_errors} scrape errors. latest: {detail}"),
+            (SATELLITE_ALIEN, "the internet said no. again."),
+        ]
+
+    if status.stale_entries:
+        lines += [
+            (EARTH_ALIEN, f"{status.stale_entries} topics are going stale."),
+            (SATELLITE_ALIEN, "it forgets like the rest of us."),
+        ]
+
+    if status.buffered_messages:
+        lines += [
+            (EARTH_ALIEN, f"{status.buffered_messages} clues buffered from the chat."),
+            (SATELLITE_ALIEN, "it is absolutely reading over your shoulder."),
+        ]
+
+    lines += [
+        (EARTH_ALIEN, f"pages scraped: {status.pages_stored:,}."),
+        (SATELLITE_ALIEN, f"{status.seeds_pending} seeds still pending. no rush."),
+        (EARTH_ALIEN, "it lives on a dell r510 in a house."),
+        (SATELLITE_ALIEN, "and it thinks that is normal."),
+    ]
+
+    return lines
+
+
+def marquee_window(text: str, offset: int, width: int, gap: str = "     ") -> str:
+    """Return the ``width``-column slice of ``text`` visible at ``offset``.
+
+    The text wraps around continuously, separated by ``gap`` so the end and
+    the restart do not run together. Text that already fits is left static
+    and padded rather than scrolled -- a short line jittering in place reads
+    as a glitch, not as activity.
+    """
+    if width <= 0 or not text:
+        return ""
+    if len(text) <= width:
+        return text.ljust(width)
+    loop = text + gap
+    start = offset % len(loop)
+    return (loop + loop)[start : start + width]
 
 
 def systemctl_is_active(service: str = "shaggoth", timeout: float = 2.0) -> Optional[bool]:
@@ -146,6 +438,27 @@ def _as_dict(value: Any) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def _collect_topics(freshness: dict) -> dict:
+    """Flatten ``freshness`` into a ``{topic: word_count}`` map.
+
+    Shaggoth reports its knowledge base split into ``fresh_topics`` and
+    ``stale_topics``; the ingestion feed only cares about the union, so the
+    two lists are merged and any malformed entry is skipped.
+    """
+    topics: dict = {}
+    for key in ("fresh_topics", "stale_topics"):
+        entries = freshness.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("topic") or "").strip()
+            if name:
+                topics[name] = _as_int(entry.get("word_count"))
+    return topics
+
+
 def parse_scheduler_response(data: Optional[dict]) -> dict:
     """Extract scheduler health from a ``/curiosity/scheduler`` payload."""
     data = _as_dict(data)
@@ -178,14 +491,23 @@ def parse_curiosity_response(data: Optional[dict], now: float) -> dict:
 
     last = data.get("last_episode")
     last_age: Optional[float] = None
+    last_id = last_topic = ""
+    last_words = 0
     if isinstance(last, dict):
-        started = last.get("started_at") or last.get("finished_at")
+        started = last.get("ended_at") or last.get("started_at") or last.get("finished_at")
         if isinstance(started, (int, float)) and started > 0:
             last_age = max(0.0, now - float(started))
+        last_id = str(last.get("episode_id") or "")
+        last_topic = str(last.get("topic") or "")
+        last_words = _as_int(last.get("words_learned"))
 
     last_error = scraper.get("last_error")
 
     return {
+        "topics": _collect_topics(freshness),
+        "last_episode_id": last_id,
+        "last_episode_topic": last_topic,
+        "last_episode_words": last_words,
         "is_researching": bool(data.get("is_running", False)),
         "current_topic": current_topic,
         "total_episodes": _as_int(data.get("total_episodes")),
@@ -297,4 +619,8 @@ def get_status(
         seeds_pending=curiosity["seeds_pending"],
         scrape_errors=curiosity["scrape_errors"],
         last_scrape_error=curiosity["last_scrape_error"],
+        topics=curiosity["topics"],
+        last_episode_id=curiosity["last_episode_id"],
+        last_episode_topic=curiosity["last_episode_topic"],
+        last_episode_words=curiosity["last_episode_words"],
     )

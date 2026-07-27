@@ -13,6 +13,7 @@ from . import rendering
 from .config import Config
 from .fly import FlyStatus
 from .ollama import OllamaStatus
+from .shaggoth import LearningCounter, ShaggothStatus, format_delta
 from .telemetry import Telemetry, format_rate
 
 EXIT_KEYS = {27, ord("q"), ord("Q")}  # ESC, q, Q
@@ -40,6 +41,7 @@ def show_help(stdscr, config: Config) -> None:
         "  R        Restart the Ollama service (confirmation required)",
         "  T        Open htop",
         "  N        View network information",
+        "  G        View Shaggoth AI learning detail",
         "  P        Pause / resume the orbital animation",
         "  C        Toggle color mode",
         "  A        Toggle ASCII-only mode",
@@ -97,6 +99,91 @@ def show_network(stdscr, config: Config, telemetry: Telemetry) -> None:
     ]
     for i, line in enumerate(rows):
         rendering.safe_addstr(stdscr, 4 + i, 2, line)
+
+    rendering.safe_addstr(stdscr, max_y - 1, 2, "Press ESC or Q to return.")
+    stdscr.refresh()
+    _wait_for_exit(stdscr)
+
+
+def shaggoth_report(
+    config: Config, status: ShaggothStatus, counter: LearningCounter
+) -> list[str]:
+    """Build the Shaggoth detail screen's body text.
+
+    Split out from the curses drawing so the report's contents can be
+    asserted directly in tests without a terminal.
+    """
+    if not status.is_up:
+        return [
+            f"Endpoint     {config.shaggoth_base_url}",
+            f"State        {status.state.value}",
+            f"Detail       {status.detail or 'unreachable'}",
+            "",
+            "Shaggoth is not answering. Check the service with:",
+            f"  systemctl status {config.shaggoth_service}",
+        ]
+
+    scheduler_line = "enabled" if status.scheduler_enabled else "DISABLED"
+    if status.scheduler_enabled:
+        scheduler_line += ", thread alive" if status.scheduler_alive else ", THREAD DEAD"
+
+    if status.last_episode_age_seconds is None:
+        last_research = "never"
+    else:
+        minutes = int(status.last_episode_age_seconds // 60)
+        last_research = f"{minutes // 60}h {minutes % 60}m ago" if minutes >= 60 else f"{minutes}m ago"
+
+    lines = [
+        f"Endpoint     {config.shaggoth_base_url}   version {status.version}",
+        f"State        {status.state.value}" + (f"  ({status.detail})" if status.detail else ""),
+        "",
+        "LEARNING",
+        f"  Topics known     {status.knowledge_entries:,}{format_delta(counter.gained_entries)}",
+        f"  Words ingested   {status.total_words:,}{format_delta(counter.gained_words)}",
+        f"  Pages stored     {status.pages_stored:,}",
+        f"  Research runs    {status.total_episodes}{format_delta(counter.gained_episodes)}",
+        f"  Fresh / stale    {status.fresh_entries:,} / {status.stale_entries:,}",
+        "",
+        "CURIOSITY LOOP",
+        f"  Scheduler        {scheduler_line}",
+        f"  Interval         every {status.interval_minutes} min",
+        f"  Buffered clues   {status.buffered_messages}",
+        f"  Last research    {last_research}",
+    ]
+
+    if status.is_researching and status.current_topic:
+        lines.append(f"  Researching now  {status.current_topic}")
+
+    lines += [
+        "",
+        "SCRAPER",
+        f"  Seeds pending    {status.seeds_pending}",
+        f"  Errors           {status.scrape_errors}",
+    ]
+    if status.last_scrape_error:
+        lines.append(f"  Last error       {status.last_scrape_error[:60]}")
+
+    lines += [
+        "",
+        "Counts in parentheses are growth since this dashboard started.",
+    ]
+    return lines
+
+
+def show_shaggoth(
+    stdscr, config: Config, status: ShaggothStatus, counter: LearningCounter
+) -> None:
+    """Full-screen Shaggoth learning detail."""
+    stdscr.erase()
+    max_y, max_x = stdscr.getmaxyx()
+    rendering.safe_addstr(stdscr, 1, 2, "Shaggoth AI — Learning Detail", curses.A_BOLD)
+    rendering.draw_hline(stdscr, 2, 2, max(0, max_x - 4), config.ascii_only)
+
+    for i, line in enumerate(shaggoth_report(config, status, counter)):
+        row = 4 + i
+        if row >= max_y - 1:
+            break
+        rendering.safe_addstr(stdscr, row, 2, line[: max(0, max_x - 4)])
 
     rendering.safe_addstr(stdscr, max_y - 1, 2, "Press ESC or Q to return.")
     stdscr.refresh()

@@ -5,17 +5,28 @@ from command_center.activity import AIActivityState
 from command_center.app import AI_BUSY_PHASES, AI_PHASE_TICKS, _ai_activity_text
 
 
+# The non-ACTIVE phrases carry attitude, so these assert the informative
+# part is present rather than pinning the exact wording -- the joke is
+# allowed to change, the meaning is not.
 def test_idle_stands_by() -> None:
-    assert _ai_activity_text(AIActivityState.IDLE, 0, False) == "standing by for uplink"
-    assert _ai_activity_text(AIActivityState.IDLE, 123, True) == "standing by for uplink"
+    assert "standing by" in _ai_activity_text(AIActivityState.IDLE, 0, False)
+    assert "standing by" in _ai_activity_text(AIActivityState.IDLE, 123, True)
+
+
+def test_idle_text_is_tick_independent() -> None:
+    assert _ai_activity_text(AIActivityState.IDLE, 0, False) == _ai_activity_text(
+        AIActivityState.IDLE, 999, False
+    )
 
 
 def test_offline() -> None:
-    assert _ai_activity_text(AIActivityState.OFFLINE, 0, False) == "uplink offline"
+    assert _ai_activity_text(AIActivityState.OFFLINE, 0, False).startswith("uplink offline")
 
 
 def test_error() -> None:
-    assert _ai_activity_text(AIActivityState.ERROR, 7, False) == "telemetry unavailable"
+    assert _ai_activity_text(AIActivityState.ERROR, 7, False).startswith(
+        "telemetry unavailable"
+    )
 
 
 def test_active_starts_with_first_phase() -> None:

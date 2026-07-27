@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional, Sequence
 
 from .activity import AIFlowPhase
 
@@ -37,6 +38,50 @@ CORE_ART = [
 
 FORWARD = 1  # Earth -> AI Core (left to right)
 REVERSE = -1  # AI Core -> Earth (right to left)
+
+
+# --------------------------------------------------------------------------
+# Aliens
+# --------------------------------------------------------------------------
+# Two observers watch the uplink and narrate what Shaggoth is learning:
+# one standing on Earth (left), one on the satellite (right). Their script
+# is supplied by the caller and built from real telemetry, so the joke is
+# always about something that actually happened.
+#
+# Everything alien lives strictly inside the animation grid. The scene can
+# get as silly as it likes without ever reaching the telemetry block, which
+# is what keeps the dashboard a dashboard.
+
+ALIEN_ART = ["(o.o)", " /|\\ "]
+ALIEN_PEEK = "(o.o)"
+
+ALIEN_LINE_TICKS = 28  # ~4 s per line of dialogue at 7 fps
+PEEK_PERIOD = 150      # ticks between stray-alien cameos (~21 s)
+PEEK_DURATION = 40     # how long a cameo lingers (~6 s)
+DROPPING_PERIOD = 45   # ticks between deposits on the floor
+MAX_DROPPINGS = 6      # deposits before the floor is mopped
+MIN_ALIEN_WIDTH = 46
+MIN_ALIEN_HEIGHT = 8
+
+
+class OverlayStyle(str, Enum):
+    """Color intent for an overlay span, resolved by the renderer."""
+
+    AMBER = "amber"
+    GREEN = "green"
+    BLUE = "blue"
+    PURPLE = "purple"
+    YELLOW = "yellow"
+
+
+@dataclass(frozen=True)
+class OverlaySpan:
+    """A run of characters drawn on top of the base frame in a given color."""
+
+    row: int
+    col: int
+    text: str
+    style: OverlayStyle
 
 
 class PacketKind(str, Enum):
@@ -79,6 +124,7 @@ class AnimationFrame:
     highlights: set[tuple[int, int]] = field(default_factory=set)
     packet_cells: dict[tuple[int, int], PacketKind] = field(default_factory=dict)
     trail_cells: dict[tuple[int, int], PacketKind] = field(default_factory=dict)
+    overlays: list[OverlaySpan] = field(default_factory=list)
     scanline_row: int | None = None
     status_text: str = "UPLINK ESTABLISHED"
 
@@ -231,6 +277,137 @@ PACKET_CHARS = {
 }
 
 
+def speech_bubble(text: str, max_width: int) -> str:
+    """Wrap ``text`` in a chat bubble, truncated to ``max_width`` columns.
+
+    Returns an empty string when there is not enough room for a bubble
+    with at least a few characters of content -- a bubble reading ``( a )``
+    is noise, so it is better to draw nothing.
+    """
+    if max_width < 8 or not text:
+        return ""
+    inner_width = max_width - 4  # "( " + " )"
+    content = text if len(text) <= inner_width else text[: inner_width - 1].rstrip() + "…"
+    return f"( {content} )"
+
+
+def last_line_for(script: Sequence, index: int, speaker: int) -> str:
+    """The most recent line spoken by ``speaker`` at or before ``index``.
+
+    Walking backwards means each alien keeps its last utterance on screen
+    while the other one replies, which is what makes two independently
+    rendered bubbles read as a single conversation.
+    """
+    if not script:
+        return ""
+    index = index % len(script)
+    for offset in range(len(script)):
+        who, text = script[(index - offset) % len(script)]
+        if who == speaker:
+            return text
+    return ""
+
+
+def _dropping_positions(tick: int, base_col: int, span: int, count: int) -> list:
+    """Deterministic deposit positions for one alien's patch of floor.
+
+    Hashed off the tick bucket rather than ``random`` so the scene stays a
+    pure function of the tick -- pausing and resuming replays it exactly.
+    """
+    positions = []
+    bucket = tick // DROPPING_PERIOD
+    for i in range(count):
+        h = ((bucket - i) * 2654435761 + i * 40503) & 0xFFFFFFFF
+        col = base_col + (h % max(1, span))
+        kind = "~" if h % 3 == 0 else "o"  # a little of each
+        positions.append((col, kind))
+    return positions
+
+
+def _draw_aliens(
+    grid: list,
+    tick: int,
+    script: Sequence,
+    ascii_only: bool,
+    reduced_motion: bool,
+) -> list:
+    """Blit the two narrators, their bubbles, cameos, and the floor mess.
+
+    Returns the overlay spans the renderer should color. Writes the same
+    characters into ``grid`` so the base pass draws them even if a caller
+    ignores the overlays.
+    """
+    height = len(grid)
+    width = len(grid[0]) if grid else 0
+    overlays: list = []
+    if width < MIN_ALIEN_WIDTH or height < MIN_ALIEN_HEIGHT:
+        return overlays
+
+    floor_row = height - 1
+    body_row = floor_row - 2
+    bubble_row = body_row - 1
+
+    def place(row: int, col: int, text: str, style: OverlayStyle) -> None:
+        if not text or not (0 <= row < height):
+            return
+        col = max(0, min(col, width - 1))
+        text = text[: width - col]
+        if not text:
+            return
+        for offset, ch in enumerate(text):
+            grid[row][col + offset] = ch
+        overlays.append(OverlaySpan(row, col, text, style))
+
+    left_col = 2
+    alien_width = max(len(row) for row in ALIEN_ART)
+    right_col = max(left_col + alien_width + 2, width - alien_width - 2)
+
+    # The two narrators. Green on Earth, purple on the satellite.
+    for dy, art_row in enumerate(ALIEN_ART):
+        place(body_row + dy, left_col, art_row, OverlayStyle.GREEN)
+        place(body_row + dy, right_col, art_row, OverlayStyle.PURPLE)
+
+    # Speech bubbles, each kept on its own half so they can never collide.
+    if script:
+        index = tick // ALIEN_LINE_TICKS
+        half = max(8, width // 2 - 4)
+
+        left_bubble = speech_bubble(last_line_for(script, index, 0), half)
+        place(bubble_row, left_col + 1, left_bubble, OverlayStyle.YELLOW)
+
+        right_text = last_line_for(script, index, 1)
+        right_bubble = speech_bubble(right_text, half)
+        if right_bubble:
+            place(
+                bubble_row,
+                max(width // 2, width - len(right_bubble) - 1),
+                right_bubble,
+                OverlayStyle.YELLOW,
+            )
+
+    # A third alien wanders in somewhere unhelpful, briefly.
+    if not reduced_motion:
+        phase = tick % PEEK_PERIOD
+        if phase < PEEK_DURATION:
+            h = (tick // PEEK_PERIOD) * 2654435761 & 0xFFFFFFFF
+            peek_row = h % max(1, max(1, bubble_row - 1))
+            peek_col = (h // 7) % max(1, width - len(ALIEN_PEEK))
+            place(peek_row, peek_col, ALIEN_PEEK, OverlayStyle.BLUE)
+
+    # ... and they are not house-trained. Deposits accumulate on the floor
+    # row -- the last row of the animation, directly above the SYSTEM
+    # TELEMETRY rule -- then the floor is mopped and it starts over.
+    if not reduced_motion:
+        count = (tick // DROPPING_PERIOD) % (MAX_DROPPINGS + 1)
+        for base, span in ((left_col, alien_width + 4), (right_col - 4, alien_width + 4)):
+            for col, kind in _dropping_positions(tick, base, span, count):
+                if kind == "~" and ascii_only:
+                    kind = ","
+                place(floor_row, col, kind, OverlayStyle.AMBER)
+
+    return overlays
+
+
 def render(
     width: int,
     height: int,
@@ -246,6 +423,8 @@ def render(
     resource_flow: bool = True,
     max_flow_packets: int = 5,
     flow_intensity: str = "subtle",
+    aliens: bool = True,
+    alien_script: Optional[Sequence] = None,
 ) -> AnimationFrame:
     """Render one animation frame as a grid of characters.
 
@@ -353,6 +532,22 @@ def render(
             grid[sat_row][pos] = "+" if ascii_only else "✦"  # ✦
             highlights.add((sat_row, pos))
 
+    # Aliens go on last so nothing else can draw over a face or a bubble.
+    overlays: list = []
+    if aliens:
+        overlays = _draw_aliens(grid, tick, alien_script or (), ascii_only, reduced_motion)
+        # A packet sharing a cell with an alien would be drawn twice, in two
+        # different colors, on the same frame -- drop the packet.
+        occupied = {
+            (span.row, span.col + i)
+            for span in overlays
+            for i in range(len(span.text))
+        }
+        for coord in occupied:
+            packet_cells.pop(coord, None)
+            trail_cells.pop(coord, None)
+            highlights.discard(coord)
+
     lines = ["".join(row) for row in grid]
 
     return AnimationFrame(
@@ -360,6 +555,7 @@ def render(
         highlights=highlights,
         packet_cells=packet_cells,
         trail_cells=trail_cells,
+        overlays=overlays,
         scanline_row=None,
         status_text=status_hint or "UPLINK ESTABLISHED",
     )

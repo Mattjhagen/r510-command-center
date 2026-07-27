@@ -23,7 +23,7 @@ def test_get_status_parses_recent_json_logs(monkeypatch) -> None:
             '{"timestamp":"2026-07-24T00:00:02Z","level":"error","message":"upstream returned 502"}',
         ]
     )
-    monkeypatch.setattr("command_center.fly.shutil.which", lambda name: "/usr/bin/flyctl")
+    monkeypatch.setattr("command_center.fly.find_flyctl_executable", lambda config=None: "/usr/bin/flyctl")
     monkeypatch.setattr(
         "command_center.fly.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, output, ""),
@@ -37,7 +37,7 @@ def test_get_status_parses_recent_json_logs(monkeypatch) -> None:
 
 
 def test_get_status_is_unavailable_without_flyctl(monkeypatch) -> None:
-    monkeypatch.setattr("command_center.fly.shutil.which", lambda name: None)
+    monkeypatch.setattr("command_center.fly.find_flyctl_executable", lambda config=None: None)
     status = get_status("archon-ide-pacmac")
     assert status.state == FlyState.UNAVAILABLE
     assert "not installed" in status.detail

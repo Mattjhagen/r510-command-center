@@ -19,6 +19,7 @@ COLOR_PAIR_GOOD = 3
 COLOR_PAIR_WARN = 4
 COLOR_PAIR_BAD = 5
 COLOR_PAIR_DIM = 6
+COLOR_PAIR_BLUE = 7
 
 
 def init_colors() -> bool:
@@ -38,6 +39,7 @@ def init_colors() -> bool:
         curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_YELLOW, background)
         curses.init_pair(COLOR_PAIR_BAD, curses.COLOR_RED, background)
         curses.init_pair(COLOR_PAIR_DIM, curses.COLOR_WHITE, background)
+        curses.init_pair(COLOR_PAIR_BLUE, curses.COLOR_BLUE, background)
         return True
     except curses.error:
         return False

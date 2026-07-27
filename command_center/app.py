@@ -15,30 +15,39 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from . import actions, activity, animation, fly, ollama, rendering, screens
+from . import actions, activity, animation, fly, ollama, rendering, screens, shaggoth
 from .config import Config, find_opencode_executable, load_config
 from .telemetry import Telemetry, TelemetryCollector, format_rate, format_uptime
 
 MIN_WIDTH = 64
-MIN_HEIGHT = 20
+MIN_HEIGHT = 22
 TARGET_FPS = 7
 FRAME_DELAY_MS = max(80, int(1000 / TARGET_FPS))
 SLOW_REFRESH_SECONDS = 3.0
-TELEMETRY_LINES = 10
+TELEMETRY_LINES = 13
+
+# Ticker columns advanced per animation tick. At TARGET_FPS this scrolls
+# the ingestion feed at a readable ~3.5 characters per second.
+MARQUEE_TICKS_PER_COLUMN = 2
 
 # Observable activity summary phases shown while AI work is detected as
 # ACTIVE. These are generic pipeline stages, not model output -- no
 # prompts, responses, or reasoning ever appear here.
+#
+# Each line names the real stage first and editorialises second, in
+# Shaggoth's voice. The joke is never allowed to cost the information:
+# read the first two words and you still know exactly where in the
+# pipeline the work is.
 AI_BUSY_PHASES = (
-    "analyzing context",
-    "planning next action",
-    "evaluating tools",
-    "generating response",
-    "finalizing output",
+    "analyzing context, all of it, again",
+    "planning next action, reluctantly",
+    "evaluating tools it does not trust",
+    "generating response at great personal cost",
+    "finalizing output, allegedly",
 )
 AI_PHASE_TICKS = TARGET_FPS * 2  # rotate busy phases roughly every two seconds
 
-KEY_ACTIONS = {"o", "s", "l", "f", "m", "r", "t", "n", "h", "?"}
+KEY_ACTIONS = {"o", "s", "l", "f", "m", "r", "t", "n", "g", "h", "?"}
 
 
 @dataclass(frozen=True)
@@ -145,10 +154,14 @@ def run(stdscr, config: Config) -> None:
     activity_monitor = activity.ActivityMonitor(config.tmux_session)
     ai_state = activity.AIActivityState.IDLE
     fly_status = fly.FlyStatus(app_name=config.fly_app_name)
+    shaggoth_status = shaggoth.ShaggothStatus()
+    learning = shaggoth.LearningCounter()
+    feed = shaggoth.LearningFeed()
 
     tick = 0
     next_slow_refresh = 0.0
     next_fly_refresh = 0.0
+    next_shaggoth_refresh = 0.0
 
     while True:
         telemetry = telemetry_collector.collect()
@@ -165,6 +178,16 @@ def run(stdscr, config: Config) -> None:
                 config.fly_app_name, config.fly_log_lines, config=config
             )
             next_fly_refresh = now + max(5.0, config.fly_refresh_seconds)
+
+        if now >= next_shaggoth_refresh:
+            shaggoth_status = shaggoth.get_status(
+                config.shaggoth_host,
+                config.shaggoth_port,
+                service=config.shaggoth_service,
+            )
+            learning.update(shaggoth_status)
+            feed.observe(shaggoth_status)
+            next_shaggoth_refresh = now + max(1.0, config.shaggoth_refresh_seconds)
 
         opencode_active = activity_monitor.poll(now)
         ai_state = activity.derive_state(ollama_status.state, opencode_active)
@@ -189,6 +212,9 @@ def run(stdscr, config: Config) -> None:
                 opencode_path,
                 tmux_state,
                 fly_status,
+                shaggoth_status,
+                learning,
+                feed,
                 tick,
                 color_available,
             )
@@ -197,13 +223,17 @@ def run(stdscr, config: Config) -> None:
 
         key = stdscr.getch()
         if key != -1:
-            outcome = _handle_key(stdscr, key, config, state, telemetry, ollama_status, fly_status)
+            outcome = _handle_key(
+                stdscr, key, config, state, telemetry, ollama_status, fly_status,
+                shaggoth_status, learning,
+            )
             stdscr.keypad(True)
             stdscr.timeout(FRAME_DELAY_MS)
             if outcome == "quit":
                 return
             if outcome == "refresh":
                 next_slow_refresh = 0.0
+                next_shaggoth_refresh = 0.0
 
         if not state.paused:
             tick += 1
@@ -217,6 +247,8 @@ def _handle_key(
     telemetry: Telemetry,
     ollama_status: ollama.OllamaStatus,
     fly_status: fly.FlyStatus,
+    shaggoth_status: shaggoth.ShaggothStatus,
+    learning: shaggoth.LearningCounter,
 ) -> Optional[str]:
     """Dispatch a keypress. Returns ``"quit"``, ``"refresh"``, or ``None``."""
     ch = chr(key) if 0 <= key < 256 else ""
@@ -248,6 +280,9 @@ def _handle_key(
     if lower == "n":
         screens.show_network(stdscr, config, telemetry)
         return None
+    if lower == "g":
+        screens.show_shaggoth(stdscr, config, shaggoth_status, learning)
+        return "refresh"
     if lower == "h" or ch == "?":
         screens.show_help(stdscr, config)
         return None
@@ -277,10 +312,51 @@ def _ai_activity_text(state: activity.AIActivityState, tick: int, ascii_only: bo
         dots = dot * ((tick // 4) % 3 + 1)
         return f"{phase} {dots}"
     if state == activity.AIActivityState.IDLE:
-        return "standing by for uplink"
+        return "idle, standing by for uplink, thrilled"
     if state == activity.AIActivityState.OFFLINE:
-        return "uplink offline"
-    return "telemetry unavailable"
+        return "uplink offline. nothing is listening."
+    return "telemetry unavailable, so your guess is as good"
+
+
+def _shaggoth_activity_text(
+    status: shaggoth.ShaggothStatus,
+    counter: shaggoth.LearningCounter,
+    tick: int,
+    ascii_only: bool,
+) -> str:
+    """Short description of what the self-hosted AI is doing right now.
+
+    Pure function of the status, the counter, and the animation tick, so it
+    is fully testable without a running daemon. Research in progress gets an
+    animated suffix; everything else is a static phrase, with the failure
+    detail preferred over a generic one whenever Shaggoth supplied it.
+    """
+    if not status.is_up:
+        return status.detail or "offline"
+
+    if status.is_researching:
+        dot = "." if ascii_only else "·"
+        dots = dot * ((tick // 4) % 3 + 1)
+        topic = status.current_topic or "a new topic"
+        return f"researching {topic} {dots}"
+
+    if status.state is shaggoth.ShaggothState.STALLED:
+        return f"stalled: {status.detail}" if status.detail else "stalled, learning nothing"
+
+    if status.state is shaggoth.ShaggothState.IDLE:
+        return "knows nothing yet, and owns it"
+
+    if counter.gained_entries or counter.gained_words:
+        return (
+            f"learned {counter.gained_entries} topic"
+            f"{'' if counter.gained_entries == 1 else 's'} this session, unprompted"
+        )
+
+    if status.buffered_messages:
+        plural = "" if status.buffered_messages == 1 else "s"
+        return f"{status.buffered_messages} clue{plural} buffered, brooding on them"
+
+    return "idle between research cycles, bored"
 
 
 def _tmux_session_state(session: str) -> str:
@@ -357,6 +433,23 @@ _FLY_COLOR = {
     fly.FlyState.DISABLED: rendering.COLOR_PAIR_DIM,
 }
 
+_OVERLAY_COLOR = {
+    animation.OverlayStyle.AMBER: rendering.COLOR_PAIR_WARN,
+    animation.OverlayStyle.GREEN: rendering.COLOR_PAIR_GOOD,
+    animation.OverlayStyle.BLUE: rendering.COLOR_PAIR_BLUE,
+    animation.OverlayStyle.PURPLE: rendering.COLOR_PAIR_ACCENT,
+    animation.OverlayStyle.YELLOW: rendering.COLOR_PAIR_WARN,
+}
+
+_SHAGGOTH_COLOR = {
+    shaggoth.ShaggothState.LEARNING: rendering.COLOR_PAIR_ACCENT,
+    shaggoth.ShaggothState.ONLINE: rendering.COLOR_PAIR_GOOD,
+    shaggoth.ShaggothState.STALLED: rendering.COLOR_PAIR_WARN,
+    shaggoth.ShaggothState.IDLE: rendering.COLOR_PAIR_NORMAL,
+    shaggoth.ShaggothState.OFFLINE: rendering.COLOR_PAIR_DIM,
+    shaggoth.ShaggothState.ERROR: rendering.COLOR_PAIR_BAD,
+}
+
 
 def _draw_dashboard(
     stdscr,
@@ -369,6 +462,9 @@ def _draw_dashboard(
     opencode_path: Optional[str],
     tmux_state: str,
     fly_status: fly.FlyStatus,
+    shaggoth_status: shaggoth.ShaggothStatus,
+    learning: shaggoth.LearningCounter,
+    feed: shaggoth.LearningFeed,
     tick: int,
     color_available: bool,
 ) -> None:
@@ -422,6 +518,8 @@ def _draw_dashboard(
             resource_flow=config.resource_flow,
             max_flow_packets=config.max_flow_packets,
             flow_intensity=config.flow_intensity,
+            aliens=config.aliens,
+            alien_script=shaggoth.alien_script(shaggoth_status, learning, feed),
         )
         for i, line in enumerate(frame.lines):
             row = anim_top + i
@@ -444,6 +542,14 @@ def _draw_dashboard(
                 pair = _PACKET_COLOR.get(kind, rendering.COLOR_PAIR_ACCENT)
                 rendering.safe_addstr(
                     stdscr, anim_top + py, 1 + px, frame.lines[py][px], attr(pair, bold=True)
+                )
+        # Aliens and their speech bubbles paint over everything else.
+        for span in frame.overlays:
+            if 0 <= span.row < len(frame.lines):
+                pair = _OVERLAY_COLOR.get(span.style, rendering.COLOR_PAIR_ACCENT)
+                rendering.safe_addstr(
+                    stdscr, anim_top + span.row, 1 + span.col, span.text,
+                    attr(pair, bold=True),
                 )
     else:
         rendering.safe_addstr(stdscr, anim_top, 1, "[ animation hidden -- widen terminal ]", dim)
@@ -521,11 +627,59 @@ def _draw_dashboard(
         activity_text[: max(0, content_width - 13)],
         attr(rendering.COLOR_PAIR_ACCENT) if ai_active else dim,
     )
+    row += 1
+
+    # Shaggoth: the self-hosted AI's health on the left, its live learning
+    # counter on the right. The counter is the point of these two rows --
+    # a total that visibly climbs is the only proof from the console that
+    # the curiosity loop is doing anything.
+    shaggoth_attr = attr(
+        _SHAGGOTH_COLOR.get(shaggoth_status.state, rendering.COLOR_PAIR_DIM), bold=True
+    )
+    rendering.safe_addstr(stdscr, row, col1_x, "SHAGGOTH", normal)
+    rendering.safe_addstr(stdscr, row, col1_x + 11, shaggoth_status.state.value, shaggoth_attr)
+
+    pulsing = learning.is_pulsing()
+    counter_attr = attr(rendering.COLOR_PAIR_ACCENT, bold=True) if pulsing else normal
+    topics_text = (
+        f"TOPICS    {learning.entries:,}{shaggoth.format_delta(learning.gained_entries)}"
+        f"   EPISODES {learning.episodes}{shaggoth.format_delta(learning.gained_episodes)}"
+    )
+    rendering.safe_addstr(stdscr, row, col2_x, topics_text[:col_width], counter_attr)
+    row += 1
+
+    learning_text = _shaggoth_activity_text(shaggoth_status, learning, tick, ascii_only)
+    learning_attr = attr(rendering.COLOR_PAIR_ACCENT) if shaggoth_status.is_researching else dim
+    rendering.safe_addstr(stdscr, row, col1_x, "LEARNING", normal)
+    rendering.safe_addstr(
+        stdscr, row, col1_x + 11,
+        learning_text[: max(0, col_width - 11)],
+        learning_attr,
+    )
+    words_text = (
+        f"WORDS     {learning.words:,}{shaggoth.format_delta(learning.gained_words)}"
+    )
+    rendering.safe_addstr(stdscr, row, col2_x, words_text[:col_width], counter_attr)
+    row += 1
+
+    # Ingestion ticker: a shell-style feed of what Shaggoth has taken in,
+    # scrolling continuously so the box reads as mid-ingestion at a glance.
+    ticker = shaggoth.marquee_text(feed.events)
+    if not ticker:
+        ticker = "matt@r510:~$ waiting for Shaggoth ingestion feed ..."
+    offset = tick // MARQUEE_TICKS_PER_COLUMN
+    rendering.safe_addstr(
+        stdscr, row, col1_x,
+        shaggoth.marquee_window(ticker, offset, content_width),
+        attr(rendering.COLOR_PAIR_GOOD) if feed.events else dim,
+    )
 
     rendering.draw_hline(stdscr, footer_sep_row, 1, content_width, ascii_only, normal)
+    # Kept to 108 columns so the whole bar survives on a 110-column
+    # terminal; adding a key means shortening a label, not overflowing.
     keybar = (
-        "[O]OpenCode [S]Shell [L]Logs [F]Fly [M]Models [R]Restart [T] "
-        "[N] [P]ause [C]olor [A]SCII [H]Help [Q]Exit"
+        "[O]penCode [S]hell [L]ogs [F]ly [M]odels [R]estart [T]op "
+        "[N]et [G]Shag [P]ause [C]olor [A]SCII [H]elp [Q]uit"
     )
     rendering.safe_addstr(stdscr, footer_row, 1, keybar[:content_width], dim)
 
