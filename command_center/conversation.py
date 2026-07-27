@@ -324,6 +324,11 @@ class ConversationEngine:
             "message": message,
             "session_id": f"{self._session_id}-{'core' if speaker == CORE else 'earth'}",
             "mode": "no_drift",
+            # This dialogue runs continuously and is nobody's actual question.
+            # Without opting out, every word it pulled out of a reply became a
+            # research topic and the knowledge base filled with entries like
+            # "understanding" and "geophysicists".
+            "research": False,
         }).encode()
         request = urllib.request.Request(
             f"{self._base_url}/chat",
