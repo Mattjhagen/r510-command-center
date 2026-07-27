@@ -1,10 +1,19 @@
 """Generative dialogue between Earth and the AI core.
 
-The two figures in the animation are not reading a canned script. The one
-on the right is Shaggoth itself: the command center asks its ``/chat``
-endpoint a question, shows the real reply, then picks a subject out of that
-reply and asks about *that* next. The conversation drifts wherever
+Neither figure is reading a script. Both are Shaggoth, held in two separate
+``/chat`` sessions and pointed at each other: whatever one says is sent to
+the other as its next message, and the reply becomes that speaker's line.
+The conversation is a real back-and-forth, and it drifts wherever
 Shaggoth's own knowledge takes it.
+
+Two sessions rather than one because ``/chat`` keeps per-session memory --
+sharing a session would have it answering its own questions inside one
+context and collapsing into a monologue.
+
+Each speaker is prompted with a *subject* pulled out of what the other just
+said, never with the reply itself: handing a reply over verbatim retrieves
+the same knowledge entry, and the two sides parrot one paragraph forever.
+Only the prompt is derived -- every line on screen is Shaggoth's own words.
 
 Every run opens on the same subject -- the novel Shaggoth has read -- so a
 restart is a fresh starting point rather than a resumed transcript. Where
@@ -42,6 +51,7 @@ MAX_BUBBLE_CHARS = 110
 #: Reply sources worth drifting from. "fallback" and "pattern" are Shaggoth
 #: talking about itself rather than about the subject.
 SUBSTANTIVE_SOURCES = frozenset({"knowledge", "model", "plugin"})
+
 
 # Words that can never be the subject of a follow-up question. Without this
 # the drift collapses almost immediately into asking about "the", "system",
@@ -300,16 +310,21 @@ class ConversationEngine:
             if len(self._lines) > MAX_LINES:
                 del self._lines[: len(self._lines) - MAX_LINES]
 
-    def _ask(self, message: str) -> tuple:
+    def _ask(self, message: str, speaker: int = CORE) -> tuple:
         """POST to ``/chat``. Returns ``(reply, source)``.
 
         ``("", "")`` on any failure -- the caller handles a silent turn by
         reseeding, and a dashboard must not die because its AI is briefly
         unreachable.
         """
-        payload = json.dumps(
-            {"message": message, "session_id": self._session_id, "mode": "no_drift"}
-        ).encode()
+        # A session per speaker: /chat keeps per-session memory, and sharing
+        # one would have Shaggoth answering its own questions inside a single
+        # context, which reads as a monologue rather than a conversation.
+        payload = json.dumps({
+            "message": message,
+            "session_id": f"{self._session_id}-{'core' if speaker == CORE else 'earth'}",
+            "mode": "no_drift",
+        }).encode()
         request = urllib.request.Request(
             f"{self._base_url}/chat",
             data=payload,
@@ -325,58 +340,62 @@ class ConversationEngine:
             return "", ""
         return str(body.get("reply") or ""), str(body.get("source") or "")
 
-    def turn(self, question: str) -> str:
-        """Run one exchange and return the question to ask next.
+    def turn(self, message: str, speaker: int = CORE) -> tuple:
+        """Run one utterance. Returns ``(next_message, next_speaker)``.
 
-        Separated from the loop so a whole conversation can be driven
-        deterministically in tests without threads, sleeps, or a network.
+        ``speaker`` is who is about to talk; ``message`` is what the other
+        one just said to them. Separated from the loop so a whole
+        conversation can be driven deterministically in tests without
+        threads, sleeps, or a network.
         """
-        self._append(EARTH, question)
-        reply, source = self._ask(question)
+        reply, source = self._ask(message, speaker)
 
         if not reply:
             with self._lock:
                 self._live = False
             # An unreachable Shaggoth must not wedge the conversation on a
-            # question it can never answer.
-            return SEED_QUESTION
+            # message it can never answer.
+            return SEED_QUESTION, CORE
 
         with self._lock:
             self._live = True
             self._turn += 1
             turn = self._turn
-        self._append(CORE, reply)
-        self._asked.add(question)
-        self._append(EARTH, earth_reaction(turn))
+        self._append(speaker, reply)
+        self._asked.add(message.lower())
 
-        # Only a substantive answer is allowed to steer the conversation.
-        # A "don't know that yet" reply is about Shaggoth, not about the
-        # subject, so mining it for the next question is how the dialogue
-        # ended up asking "why does Nothing matter".
-        repeated = reply.strip() == self._last_reply
+        substantive = source in SUBSTANTIVE_SOURCES and reply.strip() != self._last_reply
         self._last_reply = reply.strip()
 
-        # A repeat is the retrieval falling back on the same entry, not a new
-        # answer. Mining it again just re-queues subjects already exhausted.
-        if source in SUBSTANTIVE_SOURCES and not repeated:
+        if substantive:
+            # Only a real answer is allowed to steer. A "don't know that yet"
+            # reply is about Shaggoth, not about the subject, which is how the
+            # dialogue once ended up asking "why does Nothing matter".
             for subject in pick_subjects(reply, self._asked):
                 if subject not in self._queue:
                     self._queue.append(subject)
 
+        other = EARTH if speaker == CORE else CORE
+
+        # The next speaker is prompted with a *subject* drawn from what was
+        # just said -- never with the reply itself. Handing the reply over
+        # verbatim retrieves the same knowledge entry, so the two sides
+        # parroted the same paragraph back and forth. Both lines are still
+        # entirely Shaggoth's own words; only the prompt is derived.
         while self._queue:
             subject = self._queue.pop(0)
             if _is_avoided(subject, {a.lower() for a in self._asked}):
                 continue
-            self._asked.add(subject)
-            return next_question(subject, turn)
+            self._asked.add(subject.lower())
+            return next_question(subject, turn), other
 
-        # Out of threads to pull. Back to the book.
+        # Nothing new to pull on. Back to the book.
         self._asked.clear()
-        return SEED_QUESTION
+        return SEED_QUESTION, other
 
     def _run(self) -> None:
-        question = SEED_QUESTION
         self._append(EARTH, SEED_REMARK)
+        message, speaker = SEED_QUESTION, CORE
         while not self._stop.is_set():
-            question = self.turn(question)
+            message, speaker = self.turn(message, speaker)
             self._stop.wait(self._turn_seconds)

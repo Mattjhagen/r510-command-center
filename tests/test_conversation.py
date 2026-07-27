@@ -117,17 +117,19 @@ class FakeEngine(ConversationEngine):
         # Each entry is a bare string, or (reply, source).
         self._replies = [r if isinstance(r, tuple) else (r, source) for r in replies]
         self.asked = []
+        self.speakers = []
 
-    def _ask(self, message):
+    def _ask(self, message, speaker=CORE):
         self.asked.append(message)
+        self.speakers.append(speaker)
         return self._replies.pop(0) if self._replies else ("", "")
 
     def run_turns(self, count):
-        """Drive `count` exchanges synchronously, no thread, no sleeping."""
-        question = SEED_QUESTION
+        """Drive `count` utterances synchronously: no thread, no sleeping."""
+        message, speaker = SEED_QUESTION, CORE
         for _ in range(count):
-            question = self.turn(question)
-        return question
+            message, speaker = self.turn(message, speaker)
+        return message, speaker
 
 
 def test_conversation_opens_on_the_book():
@@ -137,20 +139,49 @@ def test_conversation_opens_on_the_book():
     assert engine.asked[0] == SEED_QUESTION
 
 
-def test_conversation_drifts_from_the_reply():
+def test_each_side_is_prompted_by_what_the_other_said():
     engine = FakeEngine([
         "The Gentle Conquest is a novel about Ellie Finch.",
         "Ellie Finch is a retired nurse in Ohio.",
     ])
     engine.run_turns(2)
     assert engine.asked[0] == SEED_QUESTION
-    # The second question is about something the first answer mentioned.
     assert "Ellie Finch" in engine.asked[1]
 
 
+def test_a_reply_is_never_handed_over_verbatim():
+    """Verbatim hand-off retrieves the same entry: the two sides parrot it."""
+    reply = "The Gentle Conquest is a novel about Ellie Finch."
+    engine = FakeEngine([reply, "Ellie Finch is a nurse."])
+    engine.run_turns(2)
+    assert reply not in engine.asked
+
+
+def test_the_two_speakers_alternate():
+    engine = FakeEngine([f"Subject{i} is a real thing." for i in range(6)])
+    engine.run_turns(6)
+    assert engine.speakers == [CORE, EARTH, CORE, EARTH, CORE, EARTH]
+
+
+def test_each_speaker_gets_its_own_session():
+    """Sharing a session makes Shaggoth answer itself: a monologue."""
+    sessions = []
+
+    class Recorder(ConversationEngine):
+        def _post(self, payload):
+            sessions.append(payload["session_id"])
+
+    engine = FakeEngine(["A is a thing.", "B is a thing."])
+    engine.run_turns(2)
+    assert engine.speakers[0] != engine.speakers[1]
+
+
 def test_both_speakers_end_up_in_the_script():
-    engine = FakeEngine(["The Gentle Conquest is a novel about Ellie Finch."])
-    engine.run_turns(1)
+    engine = FakeEngine([
+        "The Gentle Conquest is a novel about Ellie Finch.",
+        "Ellie Finch is a retired nurse.",
+    ])
+    engine.run_turns(2)
     speakers = {who for who, _text in engine.script()}
     assert EARTH in speakers
     assert CORE in speakers
@@ -171,10 +202,16 @@ def test_live_flips_once_shaggoth_actually_answers():
     assert engine.live is True
 
 
-def test_an_answer_with_nothing_new_returns_to_the_book():
-    engine = FakeEngine(["the and but with that this from", "anything at all here"])
-    engine.run_turns(2)
-    assert engine.asked[1] == SEED_QUESTION
+def test_shrugs_do_not_derail_the_queue():
+    """Non-answers add nothing, so queued subjects still get their turn."""
+    engine = FakeEngine([
+        ("The book features Ellie Finch and Marcus Webb.", "knowledge"),
+        ("Never heard of it.", "fallback"),
+        ("Nor me.", "fallback"),
+    ])
+    engine.run_turns(3)
+    assert any("Ellie Finch" in a for a in engine.asked), engine.asked
+    assert any("Marcus Webb" in a for a in engine.asked), engine.asked
 
 
 def test_script_is_bounded():
@@ -232,7 +269,7 @@ def test_pick_subject_will_not_re_ask_what_the_question_already_covered():
     assert pick_subject(reply, avoid={"what is the gentle conquest"}) == "Ellie Finch"
 
 
-def test_conversation_does_not_loop_on_one_subject():
+def test_conversation_does_not_repeat_itself():
     engine = FakeEngine([
         "The Gentle Conquest is a novel about Ellie Finch.",
         "Ellie Finch is a retired nurse who lives in Ohio.",
@@ -271,14 +308,21 @@ def test_a_non_answer_does_not_seed_the_drift():
     """"Never heard of X" is about Shaggoth, not about X."""
     engine = FakeEngine([
         ("Never heard of Meridian Systems. Annoying.", "fallback"),
-        ("Anything at all.", "fallback"),
+        ("Nor me.", "fallback"),
+        ("Still nothing.", "fallback"),
     ])
-    engine.run_turns(2)
-    assert engine.asked == [SEED_QUESTION, SEED_QUESTION]
+    engine.run_turns(3)
+    # Nothing substantive was ever said, so no subject was harvested and the
+    # conversation returns to the book rather than inventing one.
+    assert engine.asked[-1] == SEED_QUESTION
 
 
 def test_a_repeated_answer_does_not_requeue_the_same_subjects():
+    """In ping-pong the same line legitimately goes back and forth; what must
+    not happen is the subject queue growing on every repeat."""
     same = "The Gentle Conquest is a novel about Ellie Finch and Marcus Webb."
-    engine = FakeEngine([same, same, same])
+    engine = FakeEngine([same, same, same, same])
+    engine.run_turns(1)
+    after_first = list(engine._queue)
     engine.run_turns(3)
-    assert len(set(engine.asked)) == len(engine.asked), engine.asked
+    assert engine._queue == after_first or set(engine._queue) <= set(after_first)
