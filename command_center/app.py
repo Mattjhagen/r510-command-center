@@ -161,7 +161,9 @@ def run(stdscr, config: Config) -> None:
             next_slow_refresh = now + SLOW_REFRESH_SECONDS
 
         if now >= next_fly_refresh:
-            fly_status = fly.get_status(config.fly_app_name, config.fly_log_lines)
+            fly_status = fly.get_status(
+                config.fly_app_name, config.fly_log_lines, config=config
+            )
             next_fly_refresh = now + max(5.0, config.fly_refresh_seconds)
 
         opencode_active = activity_monitor.poll(now)

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
+
+from .config import Config, find_flyctl_executable
 
 
 class FlyState(str, Enum):
@@ -72,7 +74,12 @@ def _record_text(record: object) -> str:
     return redact_log_line(f"{timestamp} {level} {message}".strip())
 
 
-def get_status(app_name: str, max_lines: int = 120, timeout: float = 8.0) -> FlyStatus:
+def get_status(
+    app_name: str,
+    max_lines: int = 120,
+    timeout: float = 8.0,
+    config: Optional[Config] = None,
+) -> FlyStatus:
     """Fetch a recent, finite Fly log snapshot without ever streaming.
 
     Failure is represented in the returned status rather than raised so a
@@ -81,12 +88,19 @@ def get_status(app_name: str, max_lines: int = 120, timeout: float = 8.0) -> Fly
     app_name = app_name.strip()
     if not app_name:
         return FlyStatus(state=FlyState.DISABLED)
-    if shutil.which("flyctl") is None:
+
+    # Resolve flyctl through the documented search order rather than PATH
+    # alone. The official installer appends ~/.fly/bin to the *shell profile*,
+    # which a systemd unit or a tty1 login never sources -- so a perfectly
+    # working, fully authenticated flyctl is invisible to shutil.which() and
+    # the dashboard wrongly reports "flyctl not installed".
+    executable = find_flyctl_executable(config)
+    if executable is None:
         return FlyStatus(app_name=app_name, state=FlyState.UNAVAILABLE, detail="flyctl not installed")
 
     try:
         result = subprocess.run(
-            ["flyctl", "logs", "--app", app_name, "--no-tail", "--json"],
+            [executable, "logs", "--app", app_name, "--no-tail", "--json"],
             capture_output=True,
             text=True,
             timeout=timeout,

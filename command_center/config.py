@@ -36,6 +36,7 @@ class Config:
     ollama_host: str = DEFAULT_OLLAMA_HOST
     ollama_port: int = DEFAULT_OLLAMA_PORT
     opencode_path: Optional[str] = None
+    flyctl_path: Optional[str] = None
     tmux_session: str = DEFAULT_TMUX_SESSION
     refresh_interval: float = DEFAULT_REFRESH_INTERVAL
     animation_speed: float = DEFAULT_ANIMATION_SPEED
@@ -194,6 +195,42 @@ def find_opencode_executable(config: Optional[Config] = None) -> Optional[str]:
     for candidate in (
         Path.home() / ".opencode" / "bin" / "opencode",
         Path.home() / ".local" / "bin" / "opencode",
+    ):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    return None
+
+
+def find_flyctl_executable(config: Optional[Config] = None) -> Optional[str]:
+    """Locate the ``flyctl`` executable using the documented search order:
+
+    1. An explicit ``flyctl_path`` set in configuration.
+    2. ``flyctl`` on ``PATH``.
+    3. ``~/.fly/bin/flyctl`` -- where the official installer places it.
+    4. ``/usr/local/bin/flyctl``.
+
+    The Fly installer appends ``~/.fly/bin`` to the user's *shell profile*
+    rather than to the system ``PATH``. A non-interactive process -- a systemd
+    unit, a cron job, or the command center running on ``tty1`` -- never
+    sources that profile, so a fully installed and authenticated ``flyctl``
+    is invisible to :func:`shutil.which`. Searching the well-known install
+    locations prevents reporting "flyctl not installed" when it plainly is.
+
+    Returns ``None`` if no candidate is found or executable.
+    """
+    if config and config.flyctl_path:
+        candidate = Path(config.flyctl_path).expanduser()
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    found = shutil.which("flyctl")
+    if found:
+        return found
+
+    for candidate in (
+        Path.home() / ".fly" / "bin" / "flyctl",
+        Path("/usr/local/bin/flyctl"),
     ):
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
