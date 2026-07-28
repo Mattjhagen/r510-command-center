@@ -15,6 +15,13 @@ said, never with the reply itself: handing a reply over verbatim retrieves
 the same knowledge entry, and the two sides parrot one paragraph forever.
 Only the prompt is derived -- every line on screen is Shaggoth's own words.
 
+Deriving the prompt is not sufficient on its own, though: retrieval is
+deterministic per matched knowledge entry, so two differently phrased
+questions about the same underlying topic ("what is Meridian" / "tell me
+about Meridian" / "explain Meridian") can still return a byte-identical
+reply. A short window of recently shown lines is kept so a duplicate is
+caught and skipped rather than rendered again.
+
 Every run opens on the same subject -- the novel Shaggoth has read -- so a
 restart is a fresh starting point rather than a resumed transcript. Where
 it goes from there depends entirely on what Shaggoth says.
@@ -33,6 +40,7 @@ import re
 import threading
 import urllib.error
 import urllib.request
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -43,6 +51,29 @@ CORE = 1    # Shaggoth answers
 SEED_QUESTION = "what is the gentle conquest"
 SEED_REMARK = "so. you read the whole book."
 
+# When the drift runs dry (no new subject to pull on), the conversation
+# reseeds. Reseeding to a *single* fixed question is what made the two aliens
+# repeat: Shaggoth is deterministic, so the same seed retrieves the same
+# knowledge entry and the same definitional sentence every time -- the screen
+# showed one paragraph over and over. Instead, rotate through subjects drawn
+# from the novel Shaggoth has actually ingested (verified live to return
+# source="knowledge", not the ~6 canned fallbacks). Each reseed lands on a
+# different chapter, so a dry patch moves the scene forward instead of looping.
+#
+# NO_DRIFT is deliberate here (the generative model is not coherent -- see
+# AGENTS.md sections HH and the retrain gate), so the only way to keep the
+# exchange varied without a model is to feed it varied, in-knowledge seeds.
+SEED_POOL = (
+    SEED_QUESTION,
+    "tell me about the shepherd",
+    "tell me about the turning point",
+    "tell me about the friendship gap",
+    "tell me about the disappeared",
+    "tell me about the compromise",
+    "tell me about the wilderness",
+    "tell me about the model citizen",
+)
+
 DEFAULT_TURN_SECONDS = 20.0
 DEFAULT_TIMEOUT = 20.0
 MAX_LINES = 24
@@ -52,6 +83,18 @@ MAX_BUBBLE_CHARS = 110
 #: talking about itself rather than about the subject.
 SUBSTANTIVE_SOURCES = frozenset({"knowledge", "model", "plugin"})
 
+
+# Bibliographic/title-page furniture. These are capitalised on a title page
+# ("A Novel by Matt Jhagen Overview"), so they look like proper nouns. A
+# *single* one of these inside an otherwise name-shaped phrase still means
+# the phrase is title-page debris, not a name -- "Matt Jhagen Overview" kept
+# looping the dialogue back to the book's own title-page entry, because the
+# old filter only rejected a phrase where *every* word was a stopword.
+_TITLE_FURNITURE = {
+    "appendix", "author", "book", "chapter", "contents", "edition", "epilogue",
+    "foreword", "index", "novel", "overview", "preface", "prologue", "summary",
+    "volume",
+}
 
 # Words that can never be the subject of a follow-up question. Without this
 # the drift collapses almost immediately into asking about "the", "system",
@@ -71,13 +114,7 @@ _STOPWORDS = {
     "those", "though", "three", "through", "time", "two", "under", "until", "use",
     "used", "very", "was", "way", "well", "were", "what", "when", "where", "which",
     "while", "who", "whom", "why", "will", "with", "would", "you", "your",
-    # Bibliographic furniture. These are capitalised on a title page ("A Novel
-    # by Matt Jhagen Overview"), so they look like proper nouns and the drift
-    # kept asking "tell me about Novel".
-    "appendix", "author", "book", "chapter", "contents", "edition", "epilogue",
-    "foreword", "index", "novel", "overview", "preface", "prologue", "summary",
-    "volume",
-}
+} | _TITLE_FURNITURE
 
 # A capitalised word that begins a *clause* rather than a name. These follow a
 # sentence break often enough to survive the sentence-start filter, producing
@@ -204,6 +241,8 @@ def pick_subjects(text: str, avoid: Optional[set] = None, limit: int = 4) -> lis
             if not words:
                 continue
             phrase = " ".join(words)
+        if any(word.lower() in _TITLE_FURNITURE for word in words):
+            continue
         if all(word.lower() in _STOPWORDS for word in words):
             continue
         add(phrase)
@@ -271,9 +310,18 @@ class ConversationEngine:
         self._turn = 0
         self._live = False
         self._asked: set = set()
+        #: Which book seed the next dry-patch reseed will use. Starts at 1 so
+        #: the first reseed advances off SEED_QUESTION (already used to open)
+        #: rather than repeating it.
+        self._seed_idx = 1
         #: Subjects harvested from good answers, asked about in turn.
         self._queue: list = []
-        self._last_reply = ""
+        #: Normalized text of recently *shown* lines. Retrieval is
+        #: deterministic per matched entry, so two differently phrased
+        #: questions about the same topic can return a byte-identical reply
+        #: -- bounded to the same window as what is still on screen, so a
+        #: duplicate is never rendered while it would still be visible.
+        self._recent_texts: deque = deque(maxlen=MAX_LINES)
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
@@ -366,11 +414,23 @@ class ConversationEngine:
             self._live = True
             self._turn += 1
             turn = self._turn
-        self._append(speaker, reply)
+
+        normalized = " ".join(reply.split()).lower()
+        # Verified live: "what is Meridian" / "tell me about Meridian" /
+        # "explain Meridian" -- three distinct question forms -- returned a
+        # byte-identical reply, because the underlying retrieval is keyed to
+        # the matched entry, not the phrasing. Deriving a fresh subject each
+        # turn (below) does not prevent that; only checking the reply itself
+        # does. A duplicate is treated like a non-answer: not rendered,
+        # nothing harvested from it.
+        is_duplicate = bool(normalized) and normalized in self._recent_texts
+
+        if not is_duplicate:
+            self._append(speaker, reply)
+            self._recent_texts.append(normalized)
         self._asked.add(message.lower())
 
-        substantive = source in SUBSTANTIVE_SOURCES and reply.strip() != self._last_reply
-        self._last_reply = reply.strip()
+        substantive = not is_duplicate and source in SUBSTANTIVE_SOURCES
 
         if substantive:
             # Only a real answer is allowed to steer. A "don't know that yet"
@@ -394,9 +454,18 @@ class ConversationEngine:
             self._asked.add(subject.lower())
             return next_question(subject, turn), other
 
-        # Nothing new to pull on. Back to the book.
+        # Nothing new to pull on. Back to the book -- but to a *different*
+        # part of it than last time, so a dry patch does not replay one
+        # paragraph. (A silent/unreachable Shaggoth is handled above and holds
+        # the base seed; rotating only happens when Shaggoth is answering.)
         self._asked.clear()
-        return SEED_QUESTION, other
+        return self._next_seed(), other
+
+    def _next_seed(self) -> str:
+        """The next book seed to reseed from, rotating through SEED_POOL."""
+        seed = SEED_POOL[self._seed_idx % len(SEED_POOL)]
+        self._seed_idx += 1
+        return seed
 
     def _run(self) -> None:
         self._append(EARTH, SEED_REMARK)

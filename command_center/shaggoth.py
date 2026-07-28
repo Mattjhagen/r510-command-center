@@ -77,6 +77,14 @@ class ShaggothStatus:
     scrape_errors: int = 0
     last_scrape_error: str = ""
 
+    # Feedback loop. A growing repair queue means users are marking answers
+    # wrong faster than the scheduler is repairing them -- a training-quality
+    # problem the topic/word counts cannot show (the KB can grow while every
+    # new answer is judged bad).
+    feedback_total: int = 0
+    feedback_bad: int = 0
+    feedback_repair_queue: int = 0
+
     # Topic name -> word count, for every entry in the knowledge base. Used
     # to diff successive samples into an ingestion feed.
     topics: dict = field(default_factory=dict)
@@ -101,6 +109,42 @@ class ShaggothStatus:
         if self.is_researching and self.current_topic:
             return f"researching {self.current_topic}"
         return f"{self.knowledge_entries} topics · {self.total_words:,} words"
+
+    @property
+    def stale_ratio(self) -> float:
+        return (self.stale_entries / self.knowledge_entries) if self.knowledge_entries else 0.0
+
+    def training_issues(self) -> list[str]:
+        """Problems worth surfacing on the dashboard, most severe first.
+
+        Returns ``[]`` when nothing is wrong. A dashboard that can only show
+        green is decoration; this is the half that reports trouble. Every
+        entry is derived from a real counter Shaggoth reports, not a guess.
+        """
+        issues: list[str] = []
+        if not self.is_up:
+            issues.append(f"Shaggoth {self.state.value.lower()}: {self.detail or 'unreachable'}")
+            return issues
+        if self.state is ShaggothState.STALLED:
+            issues.append(f"STALLED — up but not learning ({self.detail or 'no recent research'})")
+        if self.scheduler_enabled and not self.scheduler_alive:
+            issues.append("curiosity thread DEAD — daemon answers but has stopped learning")
+        if not self.scheduler_enabled:
+            issues.append("curiosity scheduler DISABLED — no autonomous learning")
+        if self.feedback_repair_queue > 0:
+            issues.append(
+                f"feedback repair backlog: {self.feedback_repair_queue} answer(s) "
+                f"flagged wrong and awaiting re-research"
+            )
+        if self.scrape_errors > 0:
+            tail = f" (last: {self.last_scrape_error[:48]})" if self.last_scrape_error else ""
+            issues.append(f"{self.scrape_errors} scrape error(s){tail}")
+        if self.knowledge_entries and self.stale_ratio >= 0.5:
+            issues.append(
+                f"{self.stale_entries:,}/{self.knowledge_entries:,} entries stale "
+                f"({self.stale_ratio*100:.0f}%) — refresh backlog"
+            )
+        return issues
 
 
 @dataclass
@@ -470,6 +514,20 @@ def parse_scheduler_response(data: Optional[dict]) -> dict:
     }
 
 
+def parse_feedback_response(data: Optional[dict]) -> dict:
+    """Extract the feedback / repair-queue depth from a ``/feedback`` payload.
+
+    Missing endpoint or malformed body -> all zeros, so an older Shaggoth
+    without the feedback loop simply reports nothing rather than erroring.
+    """
+    data = _as_dict(data)
+    return {
+        "total": _as_int(data.get("total")),
+        "bad": _as_int(data.get("bad")),
+        "repair_queue": _as_int(data.get("repair_queue")),
+    }
+
+
 def parse_curiosity_response(data: Optional[dict], now: float) -> dict:
     """Extract learning progress from a ``/curiosity/status`` payload.
 
@@ -596,6 +654,9 @@ def get_status(
     curiosity = parse_curiosity_response(
         _http_get_json(f"{base_url}/curiosity/status", timeout), now
     )
+    feedback = parse_feedback_response(
+        _http_get_json(f"{base_url}/feedback", timeout)
+    )
 
     state, detail = _classify(scheduler, curiosity, stalled_after)
 
@@ -619,6 +680,9 @@ def get_status(
         seeds_pending=curiosity["seeds_pending"],
         scrape_errors=curiosity["scrape_errors"],
         last_scrape_error=curiosity["last_scrape_error"],
+        feedback_total=feedback["total"],
+        feedback_bad=feedback["bad"],
+        feedback_repair_queue=feedback["repair_queue"],
         topics=curiosity["topics"],
         last_episode_id=curiosity["last_episode_id"],
         last_episode_topic=curiosity["last_episode_topic"],

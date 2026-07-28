@@ -105,6 +105,38 @@ def show_network(stdscr, config: Config, telemetry: Telemetry) -> None:
     _wait_for_exit(stdscr)
 
 
+def training_health(status: ShaggothStatus, counter: LearningCounter) -> list[str]:
+    """Both sides of the training story: what's working and what's wrong.
+
+    The user asked for a dashboard that states issues AND good things. Green
+    goes under "Working", trouble under "Issues". When there is no trouble we
+    say so explicitly rather than leaving a blank the reader has to interpret.
+    """
+    working: list[str] = []
+    if counter.gained_episodes > 0:
+        working.append(f"  + {counter.gained_episodes} research run(s) completed since start")
+    if counter.gained_entries > 0 or counter.gained_words > 0:
+        working.append(
+            f"  + {counter.gained_entries:,} new topics, "
+            f"{counter.gained_words:,} words learned"
+        )
+    if status.is_researching and status.current_topic:
+        working.append(f"  + researching now: {status.current_topic}")
+    if not working and status.is_up:
+        # Up and healthy but nothing has changed yet this session.
+        working.append(f"  + healthy · {status.knowledge_entries:,} topics known, idle between cycles")
+
+    issues = status.training_issues()
+
+    lines = list(working)
+    if issues:
+        lines.append("  Issues:")
+        lines += [f"  ! {msg}" for msg in issues]
+    else:
+        lines.append("  No problems detected.")
+    return lines
+
+
 def shaggoth_report(
     config: Config, status: ShaggothStatus, counter: LearningCounter
 ) -> list[str]:
@@ -153,6 +185,9 @@ def shaggoth_report(
 
     if status.is_researching and status.current_topic:
         lines.append(f"  Researching now  {status.current_topic}")
+
+    lines += ["", "TRAINING HEALTH"]
+    lines += training_health(status, counter)
 
     lines += [
         "",

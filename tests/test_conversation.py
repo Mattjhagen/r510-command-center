@@ -313,16 +313,81 @@ def test_a_non_answer_does_not_seed_the_drift():
     ])
     engine.run_turns(3)
     # Nothing substantive was ever said, so no subject was harvested and the
-    # conversation returns to the book rather than inventing one.
-    assert engine.asked[-1] == SEED_QUESTION
+    # conversation returns to the book -- but to a *different* chapter each
+    # dry patch, rather than replaying one seed (which is what made the two
+    # aliens loop on a single paragraph).
+    from command_center.conversation import SEED_POOL
+
+    assert engine.asked[-1] in SEED_POOL
+    reseeds = [a for a in engine.asked if a in SEED_POOL]
+    assert len(set(reseeds)) > 1, engine.asked
+
+
+def test_dry_patches_rotate_through_the_book_instead_of_repeating_one_seed():
+    """The alien-loop fix: consecutive reseeds must not be identical.
+
+    Shaggoth is deterministic, so reseeding to one fixed question replays the
+    same knowledge entry forever. Rotating the seed makes a dry patch move to
+    a different chapter each time.
+    """
+    from command_center.conversation import SEED_POOL
+
+    engine = FakeEngine([("shrug", "fallback")] * 5)
+    engine.run_turns(5)
+    reseeds = [a for a in engine.asked if a in SEED_POOL]
+    # Every turn here is a non-answer, so every turn reseeds; they must differ.
+    assert len(set(reseeds)) >= 4, engine.asked
 
 
 def test_a_repeated_answer_does_not_requeue_the_same_subjects():
-    """In ping-pong the same line legitimately goes back and forth; what must
-    not happen is the subject queue growing on every repeat."""
+    """The subject queue must not grow on every repeat of the same line."""
     same = "The Gentle Conquest is a novel about Ellie Finch and Marcus Webb."
     engine = FakeEngine([same, same, same, same])
     engine.run_turns(1)
     after_first = list(engine._queue)
     engine.run_turns(3)
     assert engine._queue == after_first or set(engine._queue) <= set(after_first)
+
+
+def test_a_duplicate_reply_is_not_rendered_twice():
+    """The actual alien-loop bug: retrieval is deterministic per matched
+    entry, so two *differently phrased* questions about the same topic can
+    return a byte-identical reply (verified live: "what is Meridian" / "tell
+    me about Meridian" / "explain Meridian" all returned the same sentence).
+    Deriving a fresh subject each turn does not stop that -- the reply text
+    itself must be deduped before it reaches the screen."""
+    engine = FakeEngine([
+        "The Gentle Conquest is a novel about Ellie Finch and Marcus Webb.",
+        "Earth's current international standard prime meridian is the IERS Reference Meridian.",
+        "Earth's current international standard prime meridian is the IERS Reference Meridian.",
+    ])
+    engine.run_turns(3)
+    texts = [text for _who, text in engine.script()]
+    assert len(texts) == len(set(texts)), texts
+
+
+def test_a_duplicate_reply_does_not_derail_the_dialogue():
+    """A suppressed duplicate must still move the conversation on -- not
+    wedge it repeating the same (unrendered) request forever."""
+    engine = FakeEngine([
+        "The Gentle Conquest is a novel about Ellie Finch and Marcus Webb.",
+        "same line every time",
+        "same line every time",
+        "same line every time",
+    ])
+    engine.run_turns(4)
+    assert engine.live is True
+    # Every duplicate still gets asked about differently, or reseeds -- it
+    # never just resends the exact same question hoping for something new.
+    assert len(set(engine.asked)) == len(engine.asked), engine.asked
+
+
+def test_bibliographic_word_inside_a_phrase_rejects_the_whole_phrase():
+    """"Matt Jhagen Overview" is title-page debris, not a person called
+    Overview -- a single furniture word anywhere in the phrase must reject
+    the whole thing, not just when every word is furniture."""
+    from command_center.conversation import pick_subjects
+
+    subjects = pick_subjects("The Gentle Conquest A Novel by Matt Jhagen Overview")
+    assert "Matt Jhagen Overview" not in subjects
+    assert not any("Overview" in s for s in subjects)

@@ -370,17 +370,24 @@ def _shaggoth_activity_text(
     if status.state is shaggoth.ShaggothState.IDLE:
         return "knows nothing yet, and owns it"
 
+    # A green state can still hide training trouble (a repair backlog or
+    # scrape errors do not change the state out of ONLINE). Flag it here so
+    # the main screen never reads all-clear when it is not -- the full list
+    # is on the [G] detail screen.
+    n_issues = len(status.training_issues())
+    flag = f"  [!{n_issues}]" if n_issues else ""
+
     if counter.gained_entries or counter.gained_words:
         return (
             f"learned {counter.gained_entries} topic"
-            f"{'' if counter.gained_entries == 1 else 's'} this session, unprompted"
+            f"{'' if counter.gained_entries == 1 else 's'} this session, unprompted{flag}"
         )
 
     if status.buffered_messages:
         plural = "" if status.buffered_messages == 1 else "s"
-        return f"{status.buffered_messages} clue{plural} buffered, brooding on them"
+        return f"{status.buffered_messages} clue{plural} buffered, brooding on them{flag}"
 
-    return "idle between research cycles, bored"
+    return f"idle between research cycles, bored{flag}"
 
 
 def _tmux_session_state(session: str) -> str:
