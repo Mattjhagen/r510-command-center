@@ -449,19 +449,31 @@ def systemctl_is_active(service: str = "shaggoth", timeout: float = 2.0) -> Opti
     return result.stdout.strip() == "active"
 
 
-def _http_get_json(url: str, timeout: float) -> Optional[dict]:
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - local API only
-            if response.status != 200:
-                return None
-            payload = response.read().decode("utf-8")
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return None
-    try:
-        data = json.loads(payload)
-    except ValueError:
-        return None
-    return data if isinstance(data, dict) else None
+def _http_get_json(url: str, timeout: float, retries: int = 1) -> Optional[dict]:
+    """GET a JSON endpoint, retrying once on failure before giving up.
+
+    Verified live: under heavy concurrent load (a training run pegging every
+    core) the daemon occasionally drops a connection mid-response
+    (``BrokenPipeError``) even though the identical request succeeds
+    immediately on retry -- the known-but-previously-undiagnosed
+    intermittent-500 issue. One retry absorbs that without materially
+    slowing the dashboard's poll loop.
+    """
+    for _attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - local API only
+                if response.status != 200:
+                    continue
+                payload = response.read().decode("utf-8")
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            continue
+        try:
+            data = json.loads(payload)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
 
 
 def _as_int(value: Any, default: int = 0) -> int:
@@ -651,9 +663,24 @@ def get_status(
     scheduler = parse_scheduler_response(
         _http_get_json(f"{base_url}/curiosity/scheduler", timeout)
     )
-    curiosity = parse_curiosity_response(
-        _http_get_json(f"{base_url}/curiosity/status", timeout), now
-    )
+    curiosity_raw = _http_get_json(f"{base_url}/curiosity/status", timeout)
+    if curiosity_raw is None:
+        # /health answered but /curiosity/status did not -- distinct from a
+        # genuinely empty knowledge base, which still returns valid JSON
+        # with knowledge_entries=0. Falling through to normal classification
+        # here reports IDLE with 0 knowledge entries, and LearningCounter
+        # (which processes any "is_up" sample) reads that as the knowledge
+        # base having shrunk to zero and silently re-baselines all session
+        # growth tracking to nothing. Verified live: a dropped connection on
+        # this one endpoint alone reported a real 275,000-word / 809-entry
+        # knowledge base as zero. ERROR keeps LearningCounter from touching
+        # the sample at all (``is_up`` is False), same as any other outage.
+        return ShaggothStatus(
+            state=ShaggothState.ERROR,
+            version=str(health.get("version") or "-"),
+            detail="curiosity/status unreachable this poll",
+        )
+    curiosity = parse_curiosity_response(curiosity_raw, now)
     feedback = parse_feedback_response(
         _http_get_json(f"{base_url}/feedback", timeout)
     )

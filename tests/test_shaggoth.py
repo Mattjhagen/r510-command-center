@@ -89,6 +89,102 @@ def test_parse_curiosity_response_skips_malformed_topic_entries() -> None:
 
 
 # --------------------------------------------------------------------------
+# HTTP fetch resilience
+# --------------------------------------------------------------------------
+
+
+class _FakeResponse:
+    def __init__(self, status=200, body=b"{}"):
+        self.status = status
+        self._body = body
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_http_get_json_retries_once_before_giving_up(monkeypatch) -> None:
+    """Verified live: a request that drops mid-response under load succeeds
+    immediately on retry. One retry must absorb that."""
+    calls = []
+
+    def flaky_urlopen(url, timeout):
+        calls.append(url)
+        if len(calls) == 1:
+            raise OSError("broken pipe")
+        return _FakeResponse(body=b'{"ok": true}')
+
+    monkeypatch.setattr(shaggoth.urllib.request, "urlopen", flaky_urlopen)
+    result = shaggoth._http_get_json("http://x/y", timeout=0.1)
+    assert result == {"ok": True}
+    assert len(calls) == 2
+
+
+def test_http_get_json_gives_up_after_retries_exhausted(monkeypatch) -> None:
+    def always_fails(url, timeout):
+        raise OSError("broken pipe")
+
+    monkeypatch.setattr(shaggoth.urllib.request, "urlopen", always_fails)
+    assert shaggoth._http_get_json("http://x/y", timeout=0.1) is None
+
+
+def test_get_status_reports_error_when_curiosity_status_fetch_fails(monkeypatch) -> None:
+    """A dropped connection on /curiosity/status alone must not be read as
+    an empty knowledge base. Falling through to normal classification would
+    report IDLE with 0 entries, and LearningCounter -- which processes any
+    ``is_up`` sample -- would read that as the knowledge base having shrunk
+    to zero and silently re-baseline all session growth tracking to
+    nothing. Verified live: this exact endpoint dropped a real 809-entry
+    knowledge base to a reported zero under load."""
+    monkeypatch.setattr(shaggoth, "systemctl_is_active", lambda service, timeout=2.0: True)
+
+    def fake_get(url, timeout, retries=1):
+        if url.endswith("/health"):
+            return {"ok": True, "version": "0.1.0"}
+        if url.endswith("/curiosity/status"):
+            return None  # simulates the dropped connection
+        return {}
+
+    monkeypatch.setattr(shaggoth, "_http_get_json", fake_get)
+    status = shaggoth.get_status()
+    assert status.state == ShaggothState.ERROR
+    assert "curiosity/status" in status.detail
+    assert status.is_up is False
+
+
+def test_get_status_reports_healthy_state_when_all_endpoints_answer(monkeypatch) -> None:
+    monkeypatch.setattr(shaggoth, "systemctl_is_active", lambda service, timeout=2.0: True)
+
+    def fake_get(url, timeout, retries=1):
+        if url.endswith("/health"):
+            return {"ok": True, "version": "0.1.0"}
+        if url.endswith("/curiosity/scheduler"):
+            return {"enabled": True, "thread_alive": True, "interval_minutes": 15, "buffered_messages": 0}
+        if url.endswith("/curiosity/status"):
+            return {
+                "knowledge_entries": 809,
+                "is_running": False,
+                "total_episodes": 215,
+                "scraper_stats": {"total_words": 275035},
+                "freshness": {},
+            }
+        if url.endswith("/feedback"):
+            return {"total": 6, "bad": 6, "repair_queue": 6}
+        return {}
+
+    monkeypatch.setattr(shaggoth, "_http_get_json", fake_get)
+    status = shaggoth.get_status()
+    assert status.state == ShaggothState.ONLINE
+    assert status.knowledge_entries == 809
+    assert status.feedback_repair_queue == 6
+
+
+# --------------------------------------------------------------------------
 # State classification
 # --------------------------------------------------------------------------
 
