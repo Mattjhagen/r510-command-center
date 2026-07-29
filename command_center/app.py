@@ -672,7 +672,15 @@ def _draw_dashboard(
         _SHAGGOTH_COLOR.get(shaggoth_status.state, rendering.COLOR_PAIR_DIM), bold=True
     )
     rendering.safe_addstr(stdscr, row, col1_x, "SHAGGOTH", normal)
-    rendering.safe_addstr(stdscr, row, col1_x + 11, shaggoth_status.state.value, shaggoth_attr)
+    # State plus uptime in one glance -- "ONLINE  up 3h 12m" -- so a stray
+    # crash-loop restart (state still fine, uptime tiny) is visible without
+    # opening the [G] detail screen. Model detail lives there; there is not
+    # room for both here on a MIN_WIDTH terminal.
+    state_text = shaggoth_status.state.value
+    if shaggoth_status.uptime_seconds is not None:
+        state_text += f"  up {shaggoth_status.uptime_text}"
+    state_width = max(0, col2_x - (col1_x + 11) - 1)
+    rendering.safe_addstr(stdscr, row, col1_x + 11, state_text[:state_width], shaggoth_attr)
 
     pulsing = learning.is_pulsing()
     counter_attr = attr(rendering.COLOR_PAIR_ACCENT, bold=True) if pulsing else normal

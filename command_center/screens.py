@@ -146,14 +146,23 @@ def shaggoth_report(
     asserted directly in tests without a terminal.
     """
     if not status.is_up:
-        return [
+        lines = [
             f"Endpoint     {config.shaggoth_base_url}",
             f"State        {status.state.value}",
             f"Detail       {status.detail or 'unreachable'}",
+        ]
+        # ERROR (unit active, API unreachable) still has a real uptime --
+        # worth showing, since "active for 3 days but unreachable" points at
+        # a crash-loop or port collision, while "active for 4 seconds" points
+        # at a fresh restart still coming up.
+        if status.uptime_seconds is not None:
+            lines.append(f"Uptime       {status.uptime_text}")
+        lines += [
             "",
             "Shaggoth is not answering. Check the service with:",
             f"  systemctl status {config.shaggoth_service}",
         ]
+        return lines
 
     scheduler_line = "enabled" if status.scheduler_enabled else "DISABLED"
     if status.scheduler_enabled:
@@ -168,6 +177,8 @@ def shaggoth_report(
     lines = [
         f"Endpoint     {config.shaggoth_base_url}   version {status.version}",
         f"State        {status.state.value}" + (f"  ({status.detail})" if status.detail else ""),
+        f"Uptime       {status.uptime_text}",
+        f"Model        {status.generation_summary}",
         "",
         "LEARNING",
         f"  Topics known     {status.knowledge_entries:,}{format_delta(counter.gained_entries)}",
@@ -188,6 +199,20 @@ def shaggoth_report(
 
     lines += ["", "TRAINING HEALTH"]
     lines += training_health(status, counter)
+
+    lines += ["", "SELF-GRADING CRITIC"]
+    if not status.critic_model:
+        lines.append("  Not configured on this Shaggoth version.")
+    else:
+        run_line = "running" if status.critic_running else "NOT RUNNING"
+        if status.critic_running and not status.critic_available:
+            run_line += ", model unavailable"
+        lines.append(f"  {status.critic_summary}   ({run_line})")
+        if status.critic_judged:
+            lines.append(
+                f"  Judged {status.critic_judged}  "
+                f"(good {status.critic_good} · weak {status.critic_weak} · bad {status.critic_bad})"
+            )
 
     lines += [
         "",

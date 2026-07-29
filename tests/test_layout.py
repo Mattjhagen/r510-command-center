@@ -118,6 +118,27 @@ def test_bottom_telemetry_rows_and_contents_unchanged() -> None:
     assert "[G]Shag" in footer
 
 
+def test_shaggoth_row_shows_uptime_when_known() -> None:
+    """Service uptime belongs on the main screen too -- catching a stray
+    crash-loop restart shouldn't require opening the [G] detail screen."""
+    screen = FakeScreen(height=24, width=110)
+    status = ShaggothStatus(state=ShaggothState.ONLINE, uptime_seconds=4321.0)
+    _draw(screen, shaggoth_status=status)
+    layout = compute_layout(24)
+    row = screen.row_text(layout.telemetry_start_row + 10)
+    assert "ONLINE" in row
+    assert "up 1h 12m" in row
+
+
+def test_shaggoth_row_omits_uptime_when_unknown() -> None:
+    screen = FakeScreen(height=24, width=110)
+    status = ShaggothStatus(state=ShaggothState.OFFLINE, uptime_seconds=None)
+    _draw(screen, shaggoth_status=status)
+    layout = compute_layout(24)
+    row = screen.row_text(layout.telemetry_start_row + 10)
+    assert "up " not in row
+
+
 def test_live_learning_counters_render_totals_and_session_gain() -> None:
     screen = FakeScreen(height=24, width=110)
     status = ShaggothStatus(

@@ -5,6 +5,8 @@ counter/feed take status objects, so none of this needs a running daemon.
 """
 from __future__ import annotations
 
+import pytest
+
 from command_center import shaggoth
 from command_center.shaggoth import (
     LearningCounter,
@@ -88,6 +90,106 @@ def test_parse_curiosity_response_skips_malformed_topic_entries() -> None:
     assert parsed["topics"] == {}
 
 
+def test_parse_model_response_reads_openai_fields() -> None:
+    parsed = shaggoth.parse_model_response(
+        {"name": "openai", "openai": True, "openai_model": "gpt-4o-mini", "configured": True, "trained": True}
+    )
+    assert parsed == {
+        "name": "openai",
+        "openai": True,
+        "openai_model": "gpt-4o-mini",
+        "configured": True,
+    }
+
+
+def test_parse_model_response_tolerates_garbage() -> None:
+    parsed = shaggoth.parse_model_response(None)
+    assert parsed == {"name": "none", "openai": False, "openai_model": "", "configured": False}
+
+
+def test_parse_critic_response_reads_fields() -> None:
+    parsed = shaggoth.parse_critic_response(
+        {
+            "running": True,
+            "model": "claude-haiku-4-5-20251001",
+            "available": True,
+            "judged": 20,
+            "good": 1,
+            "weak": 3,
+            "bad": 16,
+            "last_error": "",
+        }
+    )
+    assert parsed["running"] is True
+    assert parsed["model"] == "claude-haiku-4-5-20251001"
+    assert parsed["judged"] == 20
+    assert parsed["good"] == 1
+    assert parsed["weak"] == 3
+    assert parsed["bad"] == 16
+
+
+def test_parse_critic_response_tolerates_garbage() -> None:
+    parsed = shaggoth.parse_critic_response(None)
+    assert parsed["running"] is False
+    assert parsed["model"] == ""
+    assert parsed["judged"] == 0
+
+
+# --------------------------------------------------------------------------
+# Service uptime
+# --------------------------------------------------------------------------
+
+
+class _FakeCompletedProcess:
+    def __init__(self, stdout: str = "") -> None:
+        self.stdout = stdout
+
+
+def test_service_uptime_reads_monotonic_timestamp(monkeypatch) -> None:
+    monkeypatch.setattr(
+        shaggoth.subprocess, "run",
+        lambda *a, **k: _FakeCompletedProcess("1000000000"),  # 1000s since boot
+    )
+    monkeypatch.setattr(shaggoth.time, "clock_gettime", lambda clk: 1283.5)
+    uptime = shaggoth.service_uptime_seconds()
+    assert uptime == pytest.approx(283.5)
+
+
+def test_service_uptime_none_when_never_active(monkeypatch) -> None:
+    monkeypatch.setattr(shaggoth.subprocess, "run", lambda *a, **k: _FakeCompletedProcess("0"))
+    assert shaggoth.service_uptime_seconds() is None
+
+
+def test_service_uptime_none_when_systemctl_missing(monkeypatch) -> None:
+    def raise_missing(*a, **k):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr(shaggoth.subprocess, "run", raise_missing)
+    assert shaggoth.service_uptime_seconds() is None
+
+
+def test_service_uptime_none_on_timeout(monkeypatch) -> None:
+    import subprocess as sp
+
+    def raise_timeout(*a, **k):
+        raise sp.TimeoutExpired(cmd="systemctl", timeout=2.0)
+
+    monkeypatch.setattr(shaggoth.subprocess, "run", raise_timeout)
+    assert shaggoth.service_uptime_seconds() is None
+
+
+def test_service_uptime_none_on_malformed_output(monkeypatch) -> None:
+    monkeypatch.setattr(shaggoth.subprocess, "run", lambda *a, **k: _FakeCompletedProcess("not-a-number"))
+    assert shaggoth.service_uptime_seconds() is None
+
+
+def test_service_uptime_never_negative(monkeypatch) -> None:
+    """A clock or timestamp mismatch must clamp to 0, not report negative uptime."""
+    monkeypatch.setattr(shaggoth.subprocess, "run", lambda *a, **k: _FakeCompletedProcess("5000000"))
+    monkeypatch.setattr(shaggoth.time, "clock_gettime", lambda clk: 1.0)
+    assert shaggoth.service_uptime_seconds() == 0.0
+
+
 # --------------------------------------------------------------------------
 # HTTP fetch resilience
 # --------------------------------------------------------------------------
@@ -159,6 +261,7 @@ def test_get_status_reports_error_when_curiosity_status_fetch_fails(monkeypatch)
 
 def test_get_status_reports_healthy_state_when_all_endpoints_answer(monkeypatch) -> None:
     monkeypatch.setattr(shaggoth, "systemctl_is_active", lambda service, timeout=2.0: True)
+    monkeypatch.setattr(shaggoth, "service_uptime_seconds", lambda service, timeout=2.0: 4321.0)
 
     def fake_get(url, timeout, retries=1):
         if url.endswith("/health"):
@@ -175,6 +278,10 @@ def test_get_status_reports_healthy_state_when_all_endpoints_answer(monkeypatch)
             }
         if url.endswith("/feedback"):
             return {"total": 6, "bad": 6, "repair_queue": 6}
+        if url.endswith("/model/status"):
+            return {"name": "openai", "openai": True, "openai_model": "gpt-4o-mini", "configured": True}
+        if url.endswith("/critic"):
+            return {"running": True, "model": "claude-haiku-4-5-20251001", "available": True, "judged": 20, "good": 1, "weak": 3, "bad": 16}
         return {}
 
     monkeypatch.setattr(shaggoth, "_http_get_json", fake_get)
@@ -182,6 +289,143 @@ def test_get_status_reports_healthy_state_when_all_endpoints_answer(monkeypatch)
     assert status.state == ShaggothState.ONLINE
     assert status.knowledge_entries == 809
     assert status.feedback_repair_queue == 6
+    assert status.uptime_seconds == 4321.0
+    assert status.generation_model == "openai"
+    assert status.generation_openai is True
+    assert status.generation_openai_model == "gpt-4o-mini"
+    assert status.critic_running is True
+    assert status.critic_model == "claude-haiku-4-5-20251001"
+    assert status.critic_judged == 20
+
+
+def test_get_status_older_shaggoth_without_model_or_critic_routes_degrades_quietly(monkeypatch) -> None:
+    """An older Shaggoth without /model/status or /critic must not error --
+    _http_get_json already returns None for a 404, same as any other gap."""
+    monkeypatch.setattr(shaggoth, "systemctl_is_active", lambda service, timeout=2.0: True)
+    monkeypatch.setattr(shaggoth, "service_uptime_seconds", lambda service, timeout=2.0: None)
+
+    def fake_get(url, timeout, retries=1):
+        if url.endswith("/health"):
+            return {"ok": True, "version": "0.1.0"}
+        if url.endswith("/curiosity/status"):
+            return {"knowledge_entries": 5, "is_running": False, "scraper_stats": {}, "freshness": {}}
+        if url.endswith(("/model/status", "/critic")):
+            return None
+        return {}
+
+    monkeypatch.setattr(shaggoth, "_http_get_json", fake_get)
+    status = shaggoth.get_status()
+    assert status.generation_model == "none"
+    assert status.critic_running is False
+    assert status.uptime_seconds is None
+
+
+def test_get_status_does_not_report_uptime_when_service_inactive(monkeypatch) -> None:
+    """A stale ActiveEnterTimestampMonotonic from a previous run must not be
+    reported as current uptime once the unit is confirmed no longer active."""
+    monkeypatch.setattr(shaggoth, "systemctl_is_active", lambda service, timeout=2.0: False)
+    calls = []
+    monkeypatch.setattr(
+        shaggoth, "service_uptime_seconds",
+        lambda service, timeout=2.0: calls.append(1) or 9999.0,
+    )
+    monkeypatch.setattr(shaggoth, "_http_get_json", lambda *a, **k: None)
+    status = shaggoth.get_status()
+    assert status.state == ShaggothState.OFFLINE
+    assert calls == []  # never even asked, since active is False
+
+
+# --------------------------------------------------------------------------
+# ShaggothStatus display properties
+# --------------------------------------------------------------------------
+
+
+def test_uptime_text_unknown_when_none() -> None:
+    assert ShaggothStatus().uptime_text == "-"
+
+
+def test_uptime_text_formats_seconds() -> None:
+    assert ShaggothStatus(uptime_seconds=4321.0).uptime_text == "1h 12m"
+
+
+def test_generation_summary_plain_model() -> None:
+    assert ShaggothStatus(generation_model="markov").generation_summary == "markov"
+
+
+def test_generation_summary_openai_configured() -> None:
+    status = ShaggothStatus(
+        generation_model="openai", generation_openai=True,
+        generation_openai_model="gpt-4o-mini", generation_configured=True,
+    )
+    assert status.generation_summary == "openai:gpt-4o-mini"
+
+
+def test_generation_summary_openai_missing_key() -> None:
+    status = ShaggothStatus(
+        generation_model="openai", generation_openai=True,
+        generation_openai_model="gpt-4o-mini", generation_configured=False,
+    )
+    assert "key missing" in status.generation_summary
+
+
+def test_critic_summary_not_configured() -> None:
+    assert ShaggothStatus().critic_summary == "not configured"
+
+
+def test_critic_summary_configured_but_not_running() -> None:
+    status = ShaggothStatus(critic_model="qwen2.5-coder:7b", critic_running=False)
+    assert "not running" in status.critic_summary
+
+
+def test_critic_summary_running_but_unavailable() -> None:
+    status = ShaggothStatus(critic_model="qwen2.5-coder:7b", critic_running=True, critic_available=False)
+    assert "unavailable" in status.critic_summary
+
+
+def test_critic_summary_healthy() -> None:
+    status = ShaggothStatus(critic_model="qwen2.5-coder:7b", critic_running=True, critic_available=True)
+    assert status.critic_summary == "qwen2.5-coder:7b"
+
+
+def test_training_issues_flags_critic_configured_but_not_running() -> None:
+    status = ShaggothStatus(state=ShaggothState.ONLINE, critic_model="qwen2.5-coder:7b", critic_running=False)
+    assert any("critic" in issue and "not running" in issue for issue in status.training_issues())
+
+
+def test_training_issues_flags_critic_unavailable() -> None:
+    status = ShaggothStatus(
+        state=ShaggothState.ONLINE, critic_model="qwen2.5-coder:7b",
+        critic_running=True, critic_available=False,
+    )
+    assert any("unavailable" in issue for issue in status.training_issues())
+
+
+def test_training_issues_silent_when_critic_healthy() -> None:
+    status = ShaggothStatus(
+        state=ShaggothState.ONLINE, scheduler_enabled=True, scheduler_alive=True,
+        critic_model="qwen2.5-coder:7b", critic_running=True, critic_available=True,
+    )
+    assert status.training_issues() == []
+
+
+def test_training_issues_does_not_surface_stale_last_error() -> None:
+    """A critic that recovered from a one-off error must not show a
+    permanent issue -- /critic never clears last_error on success."""
+    status = ShaggothStatus(
+        state=ShaggothState.ONLINE, scheduler_enabled=True, scheduler_alive=True,
+        critic_model="qwen2.5-coder:7b", critic_running=True, critic_available=True,
+        critic_last_error="bad parameter or other API misuse",
+    )
+    assert status.training_issues() == []
+
+
+def test_training_issues_silent_when_critic_not_configured() -> None:
+    """No critic at all (older Shaggoth) isn't itself an issue."""
+    status = ShaggothStatus(
+        state=ShaggothState.ONLINE, scheduler_enabled=True, scheduler_alive=True,
+        knowledge_entries=10,
+    )
+    assert status.training_issues() == []
 
 
 # --------------------------------------------------------------------------

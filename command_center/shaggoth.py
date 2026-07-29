@@ -22,11 +22,14 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
+
+from .telemetry import format_uptime
 
 DEFAULT_TIMEOUT = 0.6
 DEFAULT_HOST = "127.0.0.1"
@@ -92,9 +95,57 @@ class ShaggothStatus:
     last_episode_topic: str = ""
     last_episode_words: int = 0
 
+    # How long the systemd unit has been continuously active. ``None`` when
+    # the unit isn't active or systemctl couldn't be asked (offline, no
+    # systemd, timed out) -- distinct from 0, which is a real "just started".
+    uptime_seconds: Optional[float] = None
+
+    # Generation model: what actually answers a live chat message when
+    # retrieval and patterns don't cover it. "none" if nothing is loaded.
+    generation_model: str = "none"
+    generation_openai: bool = False
+    generation_openai_model: str = ""
+    generation_configured: bool = False
+
+    # Self-grading critic/teacher (shaggoth/quality/critic.py + teacher.py).
+    # Runs offline between conversations, grading Shaggoth's own past
+    # answers and filing bad ones into the feedback repair queue above.
+    critic_running: bool = False
+    critic_model: str = ""
+    critic_available: bool = False
+    critic_judged: int = 0
+    critic_good: int = 0
+    critic_weak: int = 0
+    critic_bad: int = 0
+    critic_last_error: str = ""
+
     @property
     def is_up(self) -> bool:
         return self.state not in (ShaggothState.OFFLINE, ShaggothState.ERROR)
+
+    @property
+    def uptime_text(self) -> str:
+        """Human-readable service uptime, or ``"-"`` when unknown."""
+        return "-" if self.uptime_seconds is None else format_uptime(self.uptime_seconds)
+
+    @property
+    def generation_summary(self) -> str:
+        """One-line description of the model answering live chat messages."""
+        if self.generation_openai:
+            model = self.generation_openai_model or "gpt"
+            return f"openai:{model}" if self.generation_configured else f"openai:{model} (key missing)"
+        return self.generation_model
+
+    @property
+    def critic_summary(self) -> str:
+        """One-line description of the self-grading critic's state."""
+        if not self.critic_model:
+            return "not configured"
+        if not self.critic_running:
+            return f"{self.critic_model} (not running)"
+        if not self.critic_available:
+            return f"{self.critic_model} (unavailable)"
+        return self.critic_model
 
     @property
     def learning_healthy(self) -> bool:
@@ -144,6 +195,16 @@ class ShaggothStatus:
                 f"{self.stale_entries:,}/{self.knowledge_entries:,} entries stale "
                 f"({self.stale_ratio*100:.0f}%) — refresh backlog"
             )
+        if self.critic_model and not self.critic_running:
+            issues.append("self-grading critic configured but not running")
+        elif self.critic_running and not self.critic_available:
+            issues.append(f"critic model unavailable: {self.critic_model}")
+        # critic_last_error is deliberately NOT surfaced as an issue here --
+        # Shaggoth's /critic never clears it after a subsequent success, so
+        # a single transient failure (observed live: one SQLite race right
+        # after a restart) would read as a permanent, misleading red flag
+        # with no way to tell it's stale. running + available already covers
+        # the case that actually matters: is grading happening right now.
         return issues
 
 
@@ -449,6 +510,43 @@ def systemctl_is_active(service: str = "shaggoth", timeout: float = 2.0) -> Opti
     return result.stdout.strip() == "active"
 
 
+def service_uptime_seconds(service: str = "shaggoth", timeout: float = 2.0) -> Optional[float]:
+    """How long the systemd unit has been continuously active.
+
+    ``None`` when the unit has never been active or systemctl couldn't
+    answer (missing binary, non-systemd host, timeout) -- distinct from
+    ``0.0``, which is a real "just started this instant".
+
+    Reads ``ActiveEnterTimestampMonotonic`` (microseconds on the kernel's
+    monotonic clock since boot) rather than the wall-clock
+    ``ActiveEnterTimestamp`` -- that string is locale/timezone-formatted
+    ("Wed 2026-07-29 16:57:40 UTC") and not reliably parseable across
+    systemd versions and locales. The monotonic value is always a plain
+    integer, compared directly against Python's own ``CLOCK_MONOTONIC``
+    reading, which CPython implements the same way on Linux.
+    """
+    try:
+        result = subprocess.run(
+            ["systemctl", "show", service, "--property=ActiveEnterTimestampMonotonic", "--value"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    try:
+        entered_usec = int(result.stdout.strip())
+    except ValueError:
+        return None
+    if entered_usec <= 0:
+        return None  # unit has never entered the active state
+    try:
+        now_monotonic = time.clock_gettime(time.CLOCK_MONOTONIC)
+    except (AttributeError, OSError):
+        return None
+    return max(0.0, now_monotonic - entered_usec / 1_000_000)
+
+
 def _http_get_json(url: str, timeout: float, retries: int = 1) -> Optional[dict]:
     """GET a JSON endpoint, retrying once on failure before giving up.
 
@@ -537,6 +635,40 @@ def parse_feedback_response(data: Optional[dict]) -> dict:
         "total": _as_int(data.get("total")),
         "bad": _as_int(data.get("bad")),
         "repair_queue": _as_int(data.get("repair_queue")),
+    }
+
+
+def parse_model_response(data: Optional[dict]) -> dict:
+    """Extract the active chat-generation model from a ``/model/status`` payload.
+
+    Missing endpoint or malformed body -> "none"/unconfigured, so an older
+    Shaggoth without this route simply reports nothing rather than erroring.
+    """
+    data = _as_dict(data)
+    return {
+        "name": str(data.get("name") or "none"),
+        "openai": bool(data.get("openai", False)),
+        "openai_model": str(data.get("openai_model") or ""),
+        "configured": bool(data.get("configured", False)),
+    }
+
+
+def parse_critic_response(data: Optional[dict]) -> dict:
+    """Extract the self-grading critic's state from a ``/critic`` payload.
+
+    Missing endpoint or malformed body -> not running/unconfigured, so an
+    older Shaggoth without the critic loop simply reports nothing.
+    """
+    data = _as_dict(data)
+    return {
+        "running": bool(data.get("running", False)),
+        "model": str(data.get("model") or ""),
+        "available": bool(data.get("available", False)),
+        "judged": _as_int(data.get("judged")),
+        "good": _as_int(data.get("good")),
+        "weak": _as_int(data.get("weak")),
+        "bad": _as_int(data.get("bad")),
+        "last_error": str(data.get("last_error") or ""),
     }
 
 
@@ -642,11 +774,13 @@ def get_status(
 
     Always returns promptly regardless of the daemon's actual health.
     """
-    import time
-
     now = time.time() if now is None else now
     base_url = f"http://{host}:{port}"
     active = systemctl_is_active(service)
+    # Only meaningful while the unit is confirmed active -- if it's False or
+    # unknown, ActiveEnterTimestampMonotonic (if any) describes a past run,
+    # not "how long has it been up right now".
+    uptime = service_uptime_seconds(service, timeout=min(timeout, 2.0)) if active else None
 
     health = _http_get_json(f"{base_url}/health", timeout)
     if health is None:
@@ -654,6 +788,7 @@ def get_status(
             return ShaggothStatus(
                 state=ShaggothState.ERROR,
                 detail="service active but API unreachable",
+                uptime_seconds=uptime,
             )
         return ShaggothStatus(
             state=ShaggothState.OFFLINE,
@@ -679,10 +814,17 @@ def get_status(
             state=ShaggothState.ERROR,
             version=str(health.get("version") or "-"),
             detail="curiosity/status unreachable this poll",
+            uptime_seconds=uptime,
         )
     curiosity = parse_curiosity_response(curiosity_raw, now)
     feedback = parse_feedback_response(
         _http_get_json(f"{base_url}/feedback", timeout)
+    )
+    model = parse_model_response(
+        _http_get_json(f"{base_url}/model/status", timeout)
+    )
+    critic = parse_critic_response(
+        _http_get_json(f"{base_url}/critic", timeout)
     )
 
     state, detail = _classify(scheduler, curiosity, stalled_after)
@@ -714,4 +856,17 @@ def get_status(
         last_episode_id=curiosity["last_episode_id"],
         last_episode_topic=curiosity["last_episode_topic"],
         last_episode_words=curiosity["last_episode_words"],
+        uptime_seconds=uptime,
+        generation_model=model["name"],
+        generation_openai=model["openai"],
+        generation_openai_model=model["openai_model"],
+        generation_configured=model["configured"],
+        critic_running=critic["running"],
+        critic_model=critic["model"],
+        critic_available=critic["available"],
+        critic_judged=critic["judged"],
+        critic_good=critic["good"],
+        critic_weak=critic["weak"],
+        critic_bad=critic["bad"],
+        critic_last_error=critic["last_error"],
     )
