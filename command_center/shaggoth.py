@@ -718,7 +718,13 @@ def parse_curiosity_response(data: Optional[dict], now: float) -> dict:
         "stale_entries": _as_int(freshness.get("stale_count")),
         "fresh_entries": _as_int(freshness.get("fresh_count")),
         "pages_stored": _as_int(scraper.get("pages_stored")),
-        "total_words": _as_int(scraper.get("total_words")),
+        # knowledge_total_words is the real corpus size (sums every knowledge
+        # entry). scraper_stats.total_words only covers pages fetched through
+        # the generic web-scraper table, which Wikipedia ingestion bypasses --
+        # falling back to it just means talking to an older Shaggoth build
+        # that doesn't send the new field yet.
+        "total_words": _as_int(data.get("knowledge_total_words"))
+        or _as_int(scraper.get("total_words")),
         "seeds_pending": _as_int(scraper.get("seeds_pending")),
         "scrape_errors": _as_int(scraper.get("errors")),
         "last_scrape_error": str(last_error) if last_error else "",

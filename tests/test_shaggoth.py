@@ -51,6 +51,7 @@ def test_parse_curiosity_response_extracts_live_counters() -> None:
             "is_running": False,
             "total_episodes": 1,
             "knowledge_entries": 307,
+            "knowledge_total_words": 1608179,
             "last_episode": {
                 "episode_id": "curiosity-61f07b79",
                 "topic": "aeroponic farming",
@@ -74,12 +75,24 @@ def test_parse_curiosity_response_extracts_live_counters() -> None:
         now=1000.0,
     )
     assert parsed["knowledge_entries"] == 307
-    assert parsed["total_words"] == 238431
+    # Real corpus size (knowledge_total_words) wins over the scraper-only
+    # counter -- Wikipedia ingestion never touches scraper_stats.total_words.
+    assert parsed["total_words"] == 1608179
     assert parsed["last_episode_age_seconds"] == 100.0
     assert parsed["last_episode_id"] == "curiosity-61f07b79"
     assert parsed["last_episode_words"] == 3253
     # Fresh and stale topics are merged -- the feed only cares about the union.
     assert parsed["topics"] == {"Machine Learning": 2257, "Algebra": 2151}
+
+
+def test_parse_curiosity_response_falls_back_to_scraper_words_on_older_shaggoth() -> None:
+    """An older Shaggoth without knowledge_total_words must not report 0 --
+    fall back to the scraper-only counter rather than losing the stat."""
+    parsed = shaggoth.parse_curiosity_response(
+        {"scraper_stats": {"total_words": 275035}},
+        now=0.0,
+    )
+    assert parsed["total_words"] == 275035
 
 
 def test_parse_curiosity_response_skips_malformed_topic_entries() -> None:
