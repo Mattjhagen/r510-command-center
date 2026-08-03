@@ -102,7 +102,9 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
         with urllib.request.urlopen(url, timeout=timeout) as r:
             data = json.loads(r.read().decode())
             return data if isinstance(data, dict) else None
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f"[aws] {url} -> {type(e).__name__}: {e}", file=sys.stderr)
         return None
 
 
