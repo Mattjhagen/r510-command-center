@@ -37,7 +37,7 @@ FRAME_DELAY_MS = max(80, int(1000 / TARGET_FPS))
 SLOW_REFRESH_SECONDS = 3.0
 TELEMETRY_LINES = 18  # expanded: +5 rows for AWS block
 
-AWS_BASE_URL = "http://ai.relayapp.pro"  # Cloudflare tunnel to EC2
+AWS_BASE_URL = "https://ai.relayapp.pro"  # Cloudflare tunnel to EC2
 AWS_REFRESH_SECONDS = 4.0
 
 # Ticker columns advanced per animation tick. At TARGET_FPS this scrolls
