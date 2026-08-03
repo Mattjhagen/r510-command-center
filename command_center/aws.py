@@ -18,7 +18,7 @@ from enum import Enum
 from typing import Optional
 
 
-DEFAULT_TIMEOUT = 1.5
+DEFAULT_TIMEOUT = 3.0
 
 
 class AWSState(str, Enum):
