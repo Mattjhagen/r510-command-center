@@ -99,7 +99,11 @@ class AWSStatus:
 
 def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; ShaggothMonitor/2.0)",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode())
             return data if isinstance(data, dict) else None
     except Exception as e:
