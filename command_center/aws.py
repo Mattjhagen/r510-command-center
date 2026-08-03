@@ -1,15 +1,13 @@
 """AWS EC2 remote status collector.
 
-Polls the Shaggoth monitor API on a remote EC2 instance over SSH tunnel
-or direct HTTP, returning structured data for the unified dashboard.
-Designed to degrade gracefully -- a missing or unreachable EC2 shows as
-OFFLINE rather than crashing the dashboard.
+Polls the Shaggoth API on a remote EC2 over Cloudflare tunnel.
+Uses a background thread so slow responses never block the render loop.
+Last good result is cached and shown until the next successful poll.
 """
 from __future__ import annotations
 
 import json
-import os
-import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -18,7 +16,8 @@ from enum import Enum
 from typing import Optional
 
 
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT = 8.0
+POLL_INTERVAL   = 6.0   # seconds between background polls
 
 
 class AWSState(str, Enum):
@@ -31,28 +30,11 @@ class AWSState(str, Enum):
 @dataclass
 class AWSStatus:
     state: AWSState = AWSState.OFFLINE
-    host: str = ""
     instance_type: str = "t3.small"
     region: str = "us-east-2"
 
-    # System
-    cpu_percent: float = 0.0
-    ram_percent: float = 0.0
-    disk_percent: float = 0.0
-    uptime_seconds: float = 0.0
-    load_avg: tuple = (0.0, 0.0, 0.0)
-    net_rx: float = 0.0
-    net_tx: float = 0.0
-
-    # Services
-    shaggoth_active: bool = False
-    shaggoth_uptime: str = "-"
-    cloudflared_active: bool = False
-    cloudflared_uptime: str = "-"
-
     # Shaggoth AI
     shaggoth_version: str = "?"
-    shaggoth_state: str = "OFFLINE"
     is_researching: bool = False
     current_topic: str = ""
     knowledge_entries: int = 0
@@ -108,28 +90,23 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
             return data if isinstance(data, dict) else None
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            return None  # endpoint not yet deployed, silently skip
-        import sys
-        print(f"[aws] {url} -> HTTP {e.code}", file=sys.stderr)
+            return None
         return None
     except Exception:
-        return None  # timeout/network errors are normal, don't spam footer
+        return None
 
 
-def get_status(
-    base_url: str = "http://127.0.0.1:8420",
-    timeout: float = DEFAULT_TIMEOUT,
-) -> AWSStatus:
-    """Poll the remote Shaggoth instance and return structured status."""
+def _fetch(base_url: str) -> AWSStatus:
+    """Do the full poll — called from background thread only."""
     now = time.time()
 
-    health = _http_get(f"{base_url}/health", timeout)
+    health = _http_get(f"{base_url}/health")
     if not health:
         return AWSStatus(state=AWSState.OFFLINE, detail="API unreachable", last_updated=now)
 
-    sched   = _http_get(f"{base_url}/curiosity/scheduler", timeout) or {}
-    curiosity = _http_get(f"{base_url}/curiosity/status",   timeout) or {}
-    sessions  = _http_get(f"{base_url}/sessions",           timeout) or {}
+    sched    = _http_get(f"{base_url}/curiosity/scheduler") or {}
+    curiosity = _http_get(f"{base_url}/curiosity/status")   or {}
+    sessions  = _http_get(f"{base_url}/sessions")           or {}
 
     scraper   = curiosity.get("scraper_stats", {})
     freshness = curiosity.get("freshness", {})
@@ -138,15 +115,12 @@ def get_status(
 
     researching = bool(curiosity.get("is_running", False))
     cur_topic   = (cur_ep.get("topic", "") if isinstance(cur_ep, dict) else "")
-
     state = AWSState.LEARNING if researching else AWSState.ONLINE
 
     return AWSStatus(
         state=state,
         last_updated=now,
         shaggoth_version=str(health.get("version", "?")),
-
-        # Shaggoth AI
         is_researching=researching,
         current_topic=cur_topic,
         knowledge_entries=int(curiosity.get("knowledge_entries", 0)),
@@ -161,10 +135,41 @@ def get_status(
         last_words=int(last_ep.get("words_learned", 0)),
         scheduler_alive=bool(sched.get("thread_alive", False)),
         buffered_messages=int(sched.get("buffered_messages", 0)),
-
-        # Users
         active_users=int(sessions.get("active", 0)),
         total_sessions=int(sessions.get("total_sessions", 0)),
         total_messages=int(sessions.get("total_messages", 0)),
         platforms=sessions.get("platforms", {}),
     )
+
+
+class AWSPoller:
+    """Background thread that keeps a cached AWSStatus fresh.
+
+    The dashboard reads ``poller.status`` at render time — always instant,
+    never blocks on a slow Cloudflare round trip.
+    """
+
+    def __init__(self, base_url: str, interval: float = POLL_INTERVAL) -> None:
+        self._base_url = base_url
+        self._interval = interval
+        self._status   = AWSStatus()
+        self._lock     = threading.Lock()
+        self._thread   = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    @property
+    def status(self) -> AWSStatus:
+        with self._lock:
+            return self._status
+
+    def _loop(self) -> None:
+        while True:
+            result = _fetch(self._base_url)
+            with self._lock:
+                self._status = result
+            time.sleep(self._interval)
+
+
+# Convenience wrapper kept for callers that don't want the poller
+def get_status(base_url: str, timeout: float = DEFAULT_TIMEOUT) -> AWSStatus:
+    return _fetch(base_url)
