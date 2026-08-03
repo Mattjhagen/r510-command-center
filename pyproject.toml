@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "r510-command-center"
-version = "1.0.0"
-description = "A retro NASA-mission-control-style animated TTY dashboard for a local AI server (Ollama, OpenCode, tmux)."
+name = "shaggoth-command-center"
+version = "2.0.0"
+description = "Unified orbital command center for R510 homelab + Shaggoth AWS EC2 — one curses dashboard."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -34,6 +34,7 @@ Homepage = "https://github.com/Mattjhagen/r510-command-center"
 
 [project.scripts]
 command-center = "command_center.app:main"
+shaggoth-center = "command_center.app:main"
 
 [tool.setuptools.packages.find]
 include = ["command_center*"]
