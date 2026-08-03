@@ -18,7 +18,7 @@ from enum import Enum
 from typing import Optional
 
 
-DEFAULT_TIMEOUT = 3.0
+DEFAULT_TIMEOUT = 5.0
 
 
 class AWSState(str, Enum):
@@ -106,10 +106,14 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> Optional[dict]:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode())
             return data if isinstance(data, dict) else None
-    except Exception as e:
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None  # endpoint not yet deployed, silently skip
         import sys
-        print(f"[aws] {url} -> {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[aws] {url} -> HTTP {e.code}", file=sys.stderr)
         return None
+    except Exception:
+        return None  # timeout/network errors are normal, don't spam footer
 
 
 def get_status(
