@@ -750,8 +750,7 @@ def _draw_dashboard(
         rendering.safe_addstr(stdscr, row, col1_x, "AWS EC2", normal)
         rendering.safe_addstr(stdscr, row, col1_x + 9, aws_status.state.value, aws_state_attr)
         rendering.safe_addstr(stdscr, row, col2_x,
-                               f"SHAGGOTH  v{aws_status.shaggoth_version}  "
-                               f"up {aws_status.shaggoth_version}"[:col_width], normal)
+                               f"SHAGGOTH  v{aws_status.shaggoth_version}"[:col_width], normal)
         row += 1
 
         # Knowledge counters (pulse when researching)
