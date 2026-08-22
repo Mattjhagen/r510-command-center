@@ -230,24 +230,95 @@ def shaggoth_report(
     return lines
 
 
+def _training_runs() -> list[str]:
+    """Read nightly training log and extract recent run summaries."""
+    import os, re
+    lines = []
+    for logfile in ["/home/matt/train_nightly.log", "/home/matt/train2.log"]:
+        if not os.path.exists(logfile):
+            continue
+        try:
+            with open(logfile) as f:
+                raw = f.readlines()
+        except OSError:
+            continue
+        steps = [(l.strip()) for l in raw if l.strip().startswith("step")]
+        if steps:
+            # Get first and last loss values
+            first = steps[0]
+            last = steps[-1]
+            first_loss = re.search(r"loss\s+([\d.]+)", first)
+            last_loss = re.search(r"loss\s+([\d.]+)", last)
+            last_step = re.search(r"step\s+(\d+)", last)
+            fl = float(first_loss.group(1)) if first_loss else 0
+            ll = float(last_loss.group(1)) if last_loss else 0
+            ls = int(last_step.group(1)) if last_step else 0
+            # Check if complete
+            complete = any("Trained TinyGPT" in l for l in raw)
+            status_str = "COMPLETE" if complete else f"RUNNING step {ls:,}"
+            lines.append(f"  {os.path.basename(logfile)}")
+            lines.append(f"    Status : {status_str}")
+            lines.append(f"    Steps  : {ls:,} of 10,000")
+            lines.append(f"    Loss   : {fl:.4f} → {ll:.4f}  ({fl - ll:+.4f} improvement)")
+            if complete:
+                saved = next((l for l in raw if "Trained TinyGPT" in l), "")
+                lines.append(f"    Saved  : {saved.strip()}")
+            lines.append("")
+    if not lines:
+        lines = ["  No training runs found yet.", "  Nightly training starts at 2am UTC."]
+    return lines
+
+
 def show_shaggoth(
     stdscr, config: Config, status: ShaggothStatus, counter: LearningCounter
 ) -> None:
-    """Full-screen Shaggoth learning detail."""
-    stdscr.erase()
+    """Full-screen Shaggoth learning detail with training run history."""
     max_y, max_x = stdscr.getmaxyx()
-    rendering.safe_addstr(stdscr, 1, 2, "Shaggoth AI — Learning Detail", curses.A_BOLD)
-    rendering.draw_hline(stdscr, 2, 2, max(0, max_x - 4), config.ascii_only)
+    view_height = max(1, max_y - 3)
 
-    for i, line in enumerate(shaggoth_report(config, status, counter)):
-        row = 4 + i
-        if row >= max_y - 1:
-            break
-        rendering.safe_addstr(stdscr, row, 2, line[: max(0, max_x - 4)])
+    report_lines = shaggoth_report(config, status, counter)
+    train_lines = ["", "─── Training Runs ───────────────────────────────", ""] + _training_runs()
+    all_lines = report_lines + train_lines
 
-    rendering.safe_addstr(stdscr, max_y - 1, 2, "Press ESC or Q to return.")
-    stdscr.refresh()
-    _wait_for_exit(stdscr)
+    offset = 0
+    max_offset = max(0, len(all_lines) - view_height)
+
+    stdscr.nodelay(False)
+    stdscr.timeout(-1)
+
+    while True:
+        stdscr.erase()
+        rendering.safe_addstr(stdscr, 1, 2, "Shaggoth AI — Learning Detail  [T] refresh training", curses.A_BOLD)
+        rendering.draw_hline(stdscr, 2, 2, max(0, max_x - 4), config.ascii_only)
+
+        for row in range(view_height):
+            idx = offset + row
+            if idx >= len(all_lines):
+                break
+            rendering.safe_addstr(stdscr, 3 + row, 2, all_lines[idx][: max(0, max_x - 4)])
+
+        rendering.safe_addstr(
+            stdscr, max_y - 1, 2,
+            f"Line {offset+1}-{min(offset+view_height, len(all_lines))} of {len(all_lines)}"
+            " -- Up/Down to scroll, T to refresh training, ESC/Q to return."
+        )
+        stdscr.refresh()
+
+        key = stdscr.getch()
+        if key in EXIT_KEYS or key == curses.KEY_RESIZE:
+            return
+        if key in (curses.KEY_DOWN, ord("j")):
+            offset = min(max_offset, offset + 1)
+        elif key in (curses.KEY_UP, ord("k")):
+            offset = max(0, offset - 1)
+        elif key == curses.KEY_NPAGE:
+            offset = min(max_offset, offset + view_height)
+        elif key == curses.KEY_PPAGE:
+            offset = max(0, offset - view_height)
+        elif key in (ord("t"), ord("T")):
+            train_lines = ["", "─── Training Runs ───────────────────────────────", ""] + _training_runs()
+            all_lines = report_lines + train_lines
+            max_offset = max(0, len(all_lines) - view_height)
 
 
 def show_logs(stdscr, config: Config, lines: int = 200) -> None:
