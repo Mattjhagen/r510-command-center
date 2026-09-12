@@ -42,6 +42,7 @@ def show_help(stdscr, config: Config) -> None:
         "  T        Open htop",
         "  N        View network information",
         "  G        View Shaggoth AI learning detail",
+        "  J        View R510 build journal (JOURNAL.md)",
         "  P        Pause / resume the orbital animation",
         "  C        Toggle color mode",
         "  A        Toggle ASCII-only mode",
@@ -353,6 +354,42 @@ def show_fly_logs(stdscr, status: FlyStatus) -> None:
             offset = max(0, offset - view_height)
         elif key == curses.KEY_RESIZE:
             return
+
+
+def show_journal(stdscr, config: Config) -> None:
+    """Display the R510 build journal (JOURNAL.md) in a pager."""
+    import os
+    import pathlib
+
+    # Find journal path
+    journal_path = pathlib.Path.home() / "r510-command-center" / "JOURNAL.md"
+
+    if not journal_path.exists():
+        stdscr.erase()
+        rendering.safe_addstr(stdscr, 1, 2, "R510 Build Journal", curses.A_BOLD)
+        rendering.safe_addstr(stdscr, 3, 2, "Journal not found at:")
+        rendering.safe_addstr(stdscr, 4, 2, str(journal_path))
+        rendering.safe_addstr(stdscr, 6, 2, "Press any key to continue.")
+        stdscr.refresh()
+        stdscr.nodelay(False)
+        stdscr.timeout(-1)
+        stdscr.getch()
+        return
+
+    # Use less to view the journal - suspend curses temporarily
+    curses.endwin()
+    try:
+        subprocess.run(["less", "-R", str(journal_path)])
+    except Exception:
+        # Fallback to more if less fails
+        try:
+            subprocess.run(["more", str(journal_path)])
+        except Exception:
+            pass
+    finally:
+        # Reinitialize curses
+        stdscr.clear()
+        stdscr.refresh()
 
 
 def show_message(stdscr, title: str, message_lines: list[str]) -> None:

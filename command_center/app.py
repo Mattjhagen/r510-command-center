@@ -61,7 +61,7 @@ AI_BUSY_PHASES = (
 )
 AI_PHASE_TICKS = TARGET_FPS * 2  # rotate busy phases roughly every two seconds
 
-KEY_ACTIONS = {"o", "s", "l", "f", "m", "r", "t", "n", "g", "h", "?"}
+KEY_ACTIONS = {"o", "s", "l", "f", "m", "r", "t", "n", "g", "j", "h", "?"}
 
 
 @dataclass(frozen=True)
@@ -314,6 +314,9 @@ def _handle_key(
         return None
     if lower == "g":
         screens.show_shaggoth(stdscr, config, shaggoth_status, learning)
+        return "refresh"
+    if lower == "j":
+        screens.show_journal(stdscr, config)
         return "refresh"
     if lower == "h" or ch == "?":
         screens.show_help(stdscr, config)
@@ -792,7 +795,7 @@ def _draw_dashboard(
     rendering.draw_hline(stdscr, footer_sep_row, 1, content_width, ascii_only, normal)
     keybar = (
         "[O]penCode [S]hell [L]ogs [F]ly [M]odels [R]estart [T]op "
-        "[N]et [G]Shag [P]ause [C]olor [A]SCII [H]elp [Q]uit"
+        "[N]et [G]Shag [J]ournal [P]ause [C]olor [A]SCII [H]elp [Q]uit"
     )
     rendering.safe_addstr(stdscr, footer_row, 1, keybar[:content_width], dim)
 
