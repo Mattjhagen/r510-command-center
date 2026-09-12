@@ -88,3 +88,91 @@ command-center
 - More knowledge topics via autonomous research
 - Retrain TinyGPT when corpus exceeds 100k words
 - User session analytics in dashboard
+
+## 2026-09-12 — DeepSeek-R1 Training Interface
+
+### What we built
+- **DeepSeek-R1 AI Trainer** — Gradio web interface for fine-tuning Shaggoth AI
+- **LoRA/QLoRA fine-tuning** — parameter-efficient training for 671B model
+- **Training pipeline** — dataset upload, model loading, training monitoring, testing
+- **Model integration** — DeepSeek-R1 (671B params, 37B activated) comparable to OpenAI o1
+
+### Implementation
+```
+~/AI/
+├── app.py                    — Gradio training interface
+├── DeepSeek-R1/              — Model files (163 safetensors)
+│   ├── config.json
+│   ├── tokenizer.json
+│   ├── modeling_deepseek.py
+│   └── model-*.safetensors   — 163 shards
+└── .env                      — Hugging Face API key
+```
+
+### Features
+- **Model Setup Tab**
+  - Load DeepSeek-R1 with 8-bit/4-bit quantization
+  - Automatic device mapping for multi-GPU
+  - LoRA configuration (rank, alpha, dropout)
+  - Shows trainable vs total parameters
+
+- **Dataset Tab**
+  - Upload JSONL/JSON training data
+  - Format: `instruction`, `input` (optional), `output`
+  - Live preview of first 5 examples
+  - Automatic tokenization pipeline
+
+- **Training Tab**
+  - Configurable epochs, batch size, learning rate
+  - Save and evaluation intervals
+  - Real-time training logs
+  - Checkpoint management
+
+- **Test Tab**
+  - Test trained model with prompts
+  - Adjustable max length, temperature, top_p
+  - Live inference from trained checkpoint
+
+### Model specs
+- **DeepSeek-R1**: 671B total params (37B activated MoE)
+- **Architecture**: Based on DeepSeek-V3-Base
+- **Training**: Reinforcement learning with chain-of-thought
+- **Capabilities**: Self-verification, reflection, long CoT reasoning
+- **Performance**: Matches OpenAI o1 on math/code/reasoning benchmarks
+
+### Training approach
+```python
+# LoRA fine-tuning reduces trainable params from 671B → ~8M (0.001%)
+# Target modules: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
+# Quantization: 8-bit (default) or 4-bit for memory efficiency
+# Output: Adapter weights saved to ./shaggoth-trained/
+```
+
+### Usage
+```bash
+# Start training interface
+cd ~/AI
+python3 app.py
+# Access at http://localhost:7860
+
+# Steps:
+# 1. Load model with quantization
+# 2. Setup LoRA configuration
+# 3. Upload training dataset (.jsonl)
+# 4. Configure training parameters
+# 5. Start training
+# 6. Test trained model
+```
+
+### Dependencies
+- transformers, torch, peft (LoRA)
+- gradio (web interface)
+- datasets, pandas (data handling)
+- CUDA (GPU acceleration)
+
+### Next
+- Create training datasets for Shaggoth domain knowledge
+- Run first fine-tuning experiment
+- Integrate trained model into Shaggoth API
+- Monitor GPU memory during training
+- Deploy trained checkpoint to production
