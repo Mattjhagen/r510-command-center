@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #040406;
+            color: #A855F7;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            padding: 3px;
+            gap: 3px;
+        }
+
+        /* HEADER */
+        .header {
+            background: #0d0518;
+            color: #9ca3af;
+            padding: 5px 12px;
+            border: 1px solid #5B21B6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+
+        .header-status { display: flex; gap: 12px; align-items: center; }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 6px #10b981;
+        }
+
+        /* MAIN GRID */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 220px 1fr 360px;
+            grid-template-rows: 1fr 1fr;
+            gap: 3px;
+            overflow: hidden;
+        }
+
+        /* PANELS */
+        .panel {
+            background: #0d0518;
+            border: 1px solid #5B21B6;
+            padding: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #6b7280;
+            font-weight: bold;
+            font-size: 8px;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #5B21B6;
+            text-transform: uppercase;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .panel-content::-webkit-scrollbar { width: 4px; }
+        .panel-content::-webkit-scrollbar-track { background: #0d0518; }
+        .panel-content::-webkit-scrollbar-thumb { background: #5B21B6; }
+
+        /* LEFT COLUMN */
+        .left-col {
+            grid-column: 1;
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        /* GOOGLE MAP */
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        /* FLIGHT TABLE WITH SQUAWK GLOW */
+        .flight-table {
+            width: 100%;
+            font-size: 8px;
+            border-collapse: collapse;
+        }
+
+        .flight-table th {
+            color: #6b7280;
+            border-bottom: 1px solid #5B21B6;
+            padding: 3px 2px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: #0d0518;
+        }
+
+        .flight-table td {
+            color: #e5e7eb;
+            padding: 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.2);
+        }
+
+        /* SQUAWK GLOW EFFECTS */
+        .squawk-emergency {
+            color: #EF4444 !important;
+            font-weight: bold;
+            text-shadow: 0 0 8px #EF4444;
+            animation: pulse-emergency 1s infinite;
+        }
+
+        @keyframes pulse-emergency {
+            0%, 100% { text-shadow: 0 0 8px #EF4444; }
+            50% { text-shadow: 0 0 16px #EF4444, 0 0 24px #EF4444; }
+        }
+
+        .squawk-intercepted {
+            color: #F97316 !important;
+            font-weight: bold;
+            text-shadow: 0 0 6px #F97316;
+        }
+
+        .squawk-vfr {
+            color: #38BDF8 !important;
+            text-shadow: 0 0 4px #38BDF8;
+        }
+
+        .squawk-standard {
+            color: #4ADE80 !important;
+            text-shadow: 0 0 4px #4ADE80;
+        }
+
+        /* TELEMETRY */
+        .telemetry-bar { margin: 4px 0; }
+        .telemetry-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 8px;
+        }
+        .telemetry-bar-bg {
+            height: 3px;
+            background: #1e1e32;
+            overflow: hidden;
+        }
+        .telemetry-bar-fill {
+            height: 100%;
+            background: #A855F7;
+            transition: width 0.5s;
+        }
+
+        /* ALERT */
+        .critical-alert {
+            background: #1a0000;
+            border: 2px solid #EF4444;
+            padding: 8px;
+            text-align: center;
+            animation: alert-pulse 1s infinite;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .alert-icon { color: #EF4444; font-size: 18px; font-weight: bold; }
+        .alert-text { color: #EF4444; font-weight: bold; margin-top: 3px; font-size: 9px; }
+
+        /* SERVICES */
+        .services-table { width: 100%; font-size: 8px; }
+        .services-table td {
+            padding: 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.3);
+        }
+        .service-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        .service-indicator.online {
+            background: #06b6d4;
+            box-shadow: 0 0 4px #06b6d4;
+        }
+
+        /* STATUS BUTTON */
+        .status-button {
+            background: #4ADE80;
+            color: #000;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 3px;
+            box-shadow: 0 0 8px #4ADE80;
+        }
+
+        /* LOG */
+        .log-line {
+            font-size: 8px;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.2);
+            color: #6b7280;
+        }
+        .log-time { color: #4ADE80; }
+        .log-level { color: #A855F7; }
+
+        /* FOOTER */
+        .footer {
+            background: #0d0518;
+            border: 1px solid #5B21B6;
+            padding: 4px 12px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="header">
+            <div class="header-left">[CLASSIFIED // ORBITAL AI] R510 COMMAND CENTER - NODE 01</div>
+            <div class="header-status">
+                <span>MAP API: <span id="map-status" style="color: #4ADE80;">ACTIVE</span></span>
+                <span>BCFY: <span style="color: #f59e0b;">PENDING</span></span>
+                <span id="utc-time">00:00:00 UTC</span>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div class="left-col">
+                <!-- METRIC GRAPH -->
+                <div class="panel">
+                    <div class="panel-title">SHAGGOTH-A1 TRAINING</div>
+                    <canvas id="metric-graph" width="220" height="90"></canvas>
+                    <div style="font-size: 7px; color: #6b7280; margin-top: 3px;">
+                        Loss: 0.182 | Ctx: 32k | GPU: 48°C
+                    </div>
+                </div>
+
+                <!-- ALERT -->
+                <div class="critical-alert">
+                    <div class="alert-icon">!</div>
+                    <div class="alert-text">1 ISSUE<br/>INTEGRITY FAULT</div>
+                </div>
+
+                <!-- SERVICES -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <div class="panel-title">SERVICES / NODES</div>
+                    <div class="panel-content">
+                        <table class="services-table">
+                            <tr><td><span class="service-indicator online"></span>SHAGGOTH</td><td style="color: #4ADE80; text-align: right;">V5.1</td></tr>
+                            <tr><td><span class="service-indicator online"></span>OLLAMA</td><td style="color: #4ADE80; text-align: right;">ACTIVE</td></tr>
+                            <tr><td><span class="service-indicator online"></span>DUMP1090</td><td style="color: #4ADE80; text-align: right;">ONLINE</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TELEMETRY -->
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">TELEMETRY</div>
+                    <div class="panel-content">
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span style="color: #6b7280;">CPU</span>
+                                <span style="color: #4ADE80;" id="cpu-val">45%</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="cpu-bar" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span style="color: #6b7280;">MEMORY</span>
+                                <span style="color: #4ADE80;" id="mem-val">68%</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="mem-bar" style="width: 68%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-button">TS_OPEN</div>
+            </div>
+
+            <!-- CENTER TOP - GOOGLE MAP -->
+            <div class="panel" style="grid-column: 2; grid-row: 1;">
+                <div class="panel-title">GOOGLE MAPS HYBRID RADAR & VECTOR OVERLAY</div>
+                <div class="panel-content" style="padding: 0;">
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <!-- CENTER BOTTOM - FLIGHT TABLE -->
+            <div class="panel" style="grid-column: 2; grid-row: 2;">
+                <div class="panel-title">FLIGHT DATA MATRIX // SQUAWK GLOW HIGHLIGHTS</div>
+                <div class="panel-content" id="flight-data"></div>
+            </div>
+
+            <!-- RIGHT TOP - LOGS -->
+            <div class="panel" style="grid-column: 3; grid-row: 1;">
+                <div class="panel-title">SERVER OPERATIONAL LOGS</div>
+                <div class="panel-content" id="log-feed"></div>
+            </div>
+
+            <!-- RIGHT BOTTOM - CRIME -->
+            <div class="panel" style="grid-column: 3; grid-row: 2;">
+                <div class="panel-title">SPOTCRIME CAD FEED</div>
+                <div class="panel-content" id="crime-feed"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div>[CLASSIFIED // DEEP_ACCESS] NODE_01 // Omaha, NE</div>
+            <div id="footer-time">TIME: 00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIG
+        const CONFIG = {
+            GOOGLE_MAPS_API_KEY: 'YOUR_GOOGLE_MAPS_API_KEY', // Replace with your key
+            DUMP1090_ENDPOINT: 'http://192.168.0.169:8080/data/aircraft.json',
+            MAP_CENTER: { lat: 41.2565, lng: -95.9345 }, // Omaha, NE
+            UPDATE_INTERVAL: 3000
+        };
+
+        let map, markers = {}, crimeMarkers = [];
+
+        // INITIALIZE GOOGLE MAP
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: CONFIG.MAP_CENTER,
+                zoom: 11,
+                mapTypeId: 'hybrid',
+                disableDefaultUI: true,
+                styles: [
+                    { elementType: 'labels.text.fill', stylers: [{ color: '#A855F7' }] },
+                    { elementType: 'labels.text.stroke', stylers: [{ color: '#000000' }] }
+                ]
+            });
+
+            // Add infrastructure markers
+            addInfrastructureMarkers();
+
+            // Start updates
+            updateData();
+            setInterval(updateData, CONFIG.UPDATE_INTERVAL);
+        }
+
+        // ADD INFRASTRUCTURE REFERENCE MARKERS
+        function addInfrastructureMarkers() {
+            const locations = [
+                { pos: { lat: 41.2587, lng: -95.9378 }, title: 'OPD Central HQ', color: '#06b6d4' },
+                { pos: { lat: 41.2620, lng: -95.9420 }, title: 'Fire Station 1', color: '#EF4444' }
+            ];
+
+            locations.forEach(loc => {
+                new google.maps.Marker({
+                    position: loc.pos,
+                    map: map,
+                    title: loc.title,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 6,
+                        fillColor: loc.color,
+                        fillOpacity: 0.8,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 2
+                    }
+                });
+            });
+        }
+
+        // FETCH & UPDATE DATA
+        async function updateData() {
+            try {
+                const response = await fetch(CONFIG.DUMP1090_ENDPOINT);
+                const data = await response.json();
+                updateFlights(data.aircraft || []);
+            } catch (error) {
+                console.error('Data fetch error:', error);
+                generateSimulatedFlights();
+            }
+        }
+
+        // UPDATE FLIGHTS ON MAP & TABLE
+        function updateFlights(aircraft) {
+            // Filter valid aircraft
+            const validAircraft = aircraft.filter(a => a.lat && a.lon);
+
+            // Update markers
+            const currentIds = new Set();
+            validAircraft.forEach(a => {
+                const id = a.flight || a.hex;
+                currentIds.add(id);
+
+                const pos = { lat: a.lat, lng: a.lon };
+                
+                if (markers[id]) {
+                    markers[id].setPosition(pos);
+                } else {
+                    markers[id] = new google.maps.Marker({
+                        position: pos,
+                        map: map,
+                        title: id,
+                        icon: {
+                            path: 'M 0,-2 L 2,2 L 0,1 L -2,2 Z',
+                            fillColor: '#A855F7',
+                            fillOpacity: 0.9,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 1,
+                            scale: 3,
+                            rotation: a.track || 0
+                        }
+                    });
+                }
+            });
+
+            // Remove old markers
+            Object.keys(markers).forEach(id => {
+                if (!currentIds.has(id)) {
+                    markers[id].setMap(null);
+                    delete markers[id];
+                }
+            });
+
+            // Update table
+            updateFlightTable(validAircraft);
+        }
+
+        // UPDATE FLIGHT TABLE WITH SQUAWK GLOW
+        function updateFlightTable(aircraft) {
+            const container = document.getElementById('flight-data');
+            container.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.className = 'flight-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>ICAO</th>
+                        <th>FLIGHT</th>
+                        <th>ALT</th>
+                        <th>SPEED</th>
+                        <th>TRACK</th>
+                        <th>LAT</th>
+                        <th>LON</th>
+                        <th>SQUAWK</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            aircraft.slice(0, 50).forEach(a => {
+                const squawk = a.squawk || '0000';
+                const squawkClass = getSquawkClass(squawk);
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${a.hex || 'N/A'}</td>
+                    <td>${(a.flight || '').trim() || a.hex}</td>
+                    <td>${Math.floor(a.altitude || 0)}ft</td>
+                    <td>${Math.floor(a.gs || 0)}kt</td>
+                    <td>${a.track || 0}°</td>
+                    <td>${(a.lat || 0).toFixed(2)}°</td>
+                    <td>${(a.lon || 0).toFixed(2)}°</td>
+                    <td class="${squawkClass}">${squawk}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            container.appendChild(table);
+        }
+
+        // GET SQUAWK CODE CLASS
+        function getSquawkClass(squawk) {
+            if (['7500', '7600', '7700'].includes(squawk)) return 'squawk-emergency';
+            if (squawk.startsWith('75') || squawk.startsWith('76')) return 'squawk-intercepted';
+            if (squawk === '1200') return 'squawk-vfr';
+            return 'squawk-standard';
+        }
+
+        // SIMULATED FLIGHT DATA
+        function generateSimulatedFlights() {
+            const simulated = [];
+            const airlines = ['SWA', 'UAL', 'DAL'];
+            
+            for (let i = 0; i < 20; i++) {
+                const latOffset = (Math.random() - 0.5) * 0.5;
+                const lonOffset = (Math.random() - 0.5) * 0.5;
+                
+                simulated.push({
+                    hex: Math.random().toString(36).substring(2, 8).toUpperCase(),
+                    flight: airlines[Math.floor(Math.random() * airlines.length)] + Math.floor(Math.random() * 9000 + 1000),
+                    lat: CONFIG.MAP_CENTER.lat + latOffset,
+                    lon: CONFIG.MAP_CENTER.lng + lonOffset,
+                    altitude: Math.floor(Math.random() * 35000 + 5000),
+                    gs: Math.floor(Math.random() * 200 + 300),
+                    track: Math.floor(Math.random() * 360),
+                    squawk: i === 0 ? '7700' : (i === 1 ? '1200' : String(Math.floor(Math.random() * 7777)))
+                });
+            }
+            
+            updateFlights(simulated);
+        }
+
+        // METRIC GRAPH
+        function drawMetricGraph() {
+            const canvas = document.getElementById('metric-graph');
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0d0518';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#5B21B6';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let x = 0; x < canvas.width; x += 2) {
+                const t = x / canvas.width;
+                const y = canvas.height * 0.9 - (Math.exp(-t * 3) * canvas.height * 0.6);
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // LOGS
+        function generateLog() {
+            const container = document.getElementById('log-feed');
+            const messages = [
+                'Ollama service healthy',
+                'Google Maps API connected',
+                'dump1090 data stream active',
+                'Squawk 7700 detected - emergency protocol',
+                'Neural network sync completed'
+            ];
+
+            setInterval(() => {
+                const now = new Date();
+                const timestamp = now.toISOString().substring(11, 23);
+                const message = messages[Math.floor(Math.random() * messages.length)];
+
+                const logLine = document.createElement('div');
+                logLine.className = 'log-line';
+                logLine.innerHTML = `<span class="log-time">[${timestamp}]</span> <span class="log-level">INFO</span>: ${message}`;
+
+                container.insertBefore(logLine, container.firstChild);
+                while (container.children.length > 50) container.removeChild(container.lastChild);
+            }, 2000);
+        }
+
+        // TIME UPDATE
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('utc-time').textContent = now.toISOString().substring(11, 19) + ' UTC';
+            document.getElementById('footer-time').textContent = 'TIME: ' + now.toTimeString().substring(0, 8);
+        }
+
+        // INIT
+        window.addEventListener('load', () => {
+            drawMetricGraph();
+            generateLog();
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+    </script>
+
+    <!-- Google Maps API -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap">
+    </script>
+</body>
+</html>

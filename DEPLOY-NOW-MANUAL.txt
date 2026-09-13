@@ -1,0 +1,114 @@
+╔══════════════════════════════════════════════════════════════╗
+║  DEPLOY TO R510 - STEP BY STEP                               ║
+╚══════════════════════════════════════════════════════════════╝
+
+STEP 1: Configure Google Maps API Key
+──────────────────────────────────────────────────────────────
+
+Open a terminal and run:
+
+cd ~/r510-command-center
+
+# Enter your API key when prompted:
+read -p "Enter Google Maps API key: " API_KEY
+
+# Apply the key:
+sed -i '' "s/YOUR_GOOGLE_MAPS_API_KEY/${API_KEY}/g" command-center-dashboard.html
+
+echo "✅ API key configured"
+
+
+STEP 2: Copy Files to R510
+──────────────────────────────────────────────────────────────
+
+scp -r ~/r510-command-center/ matt@192.168.0.169:~/
+
+
+STEP 3: SSH to R510 and Deploy
+──────────────────────────────────────────────────────────────
+
+ssh matt@192.168.0.169
+
+cd ~/r510-command-center
+
+# Run the deployment script:
+sudo ./r510-deploy-all.sh
+
+# Follow the prompts:
+# - Install FR24 MCP? (y/n) - your choice
+# - Install dump1090? (n) - you already have it
+# - SpotCrime API? (n) - optional, add later
+
+
+STEP 4: Access Dashboard
+──────────────────────────────────────────────────────────────
+
+Open browser to:
+  http://192.168.0.169:8421
+
+Expected result:
+  ✅ Google Maps with satellite view
+  ✅ Aircraft from dump1090
+  ✅ Squawk code glow effects
+  ✅ All panels populated
+
+
+STEP 5: Verify Boot Persistence
+──────────────────────────────────────────────────────────────
+
+On R510:
+cd ~/r510-command-center
+./verify-autostart.sh
+
+# Should show:
+✅ r510-dashboard ENABLED for autostart
+
+
+QUICK COPY-PASTE VERSION:
+──────────────────────────────────────────────────────────────
+
+# On your Mac:
+cd ~/r510-command-center
+scp -r . matt@192.168.0.169:~/r510-command-center/
+
+# SSH to R510:
+ssh matt@192.168.0.169
+
+# On R510:
+cd ~/r510-command-center
+sudo ./r510-deploy-all.sh
+
+# Then access:
+# http://192.168.0.169:8421
+
+
+TROUBLESHOOTING:
+──────────────────────────────────────────────────────────────
+
+If dashboard doesn't load:
+  sudo systemctl status r510-dashboard
+  sudo journalctl -u r510-dashboard -f
+
+If no aircraft appear:
+  curl http://192.168.0.169:8080/data/aircraft.json
+
+If port not accessible:
+  sudo ufw allow 8421/tcp
+
+
+WHICH DASHBOARD VERSION?
+──────────────────────────────────────────────────────────────
+
+After deployment, you can switch versions:
+
+Use Google Maps version (with API key):
+  sudo cp command-center-dashboard.html /opt/r510-dashboard/index.html
+  sudo systemctl restart r510-dashboard
+
+Use Canvas version (no API key):
+  sudo cp index.html /opt/r510-dashboard/index.html
+  sudo systemctl restart r510-dashboard
+
+═══════════════════════════════════════════════════════════════
+
+Ready to deploy! Start with STEP 1 above.

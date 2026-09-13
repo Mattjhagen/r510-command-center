@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER - NODE 01</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f1419;
+            color: #a8b2bc;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            font-size: 10px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto auto;
+            height: 100vh;
+            padding: 3px;
+            gap: 3px;
+        }
+
+        .header {
+            background: #1a1f26;
+            color: #a8b2bc;
+            padding: 5px 12px;
+            border: 1px solid #4a8fa0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+
+        .header-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .header-status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6ea87d;
+            box-shadow: 0 0 6px #6ea87d;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.offline {
+            background: #c96c6c;
+            box-shadow: 0 0 6px #c96c6c;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr 340px;
+            grid-template-rows: 1fr 180px 118px;
+            gap: 3px;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #4a8fa0;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #4a8fa0;
+            border-radius: 2px;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+        }
+
+        .leaflet-container {
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        .map-tiles-dark {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #1a1f26;
+            color: #a8b2bc;
+            border: 1px solid #4a8fa0;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+        }
+
+        /* CRIME DETAILS */
+        .crime-detail-card {
+            background: #1f2429;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .crime-detail-card.focused {
+            border-color: #6eb3c4;
+            box-shadow: 0 0 10px rgba(110, 179, 196, 0.3);
+        }
+
+        .crime-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .crime-detail-type {
+            font-weight: bold;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .crime-detail-urgency {
+            font-size: 7px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+            font-weight: bold;
+        }
+
+        .crime-detail-urgency.high { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+        .crime-detail-urgency.medium { background: rgba(245, 158, 11, 0.2); color: #F59E0B; }
+        .crime-detail-urgency.low { background: rgba(59, 130, 246, 0.2); color: #3B82F6; }
+
+        .crime-detail-info {
+            font-size: 8px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .crime-detail-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 3px;
+        }
+
+        .crime-detail-label {
+            color: #6eb3c4;
+            min-width: 50px;
+        }
+
+        /* FLIGHTS */
+        .flight-row {
+            font-size: 8px;
+            padding: 3px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .flight-callsign {
+            color: #10b981;
+            font-weight: bold;
+            font-size: 9px;
+        }
+
+        .flight-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+            display: inline-block;
+        }
+
+        .squawk-emergency {
+            color: #EF4444 !important;
+            animation: pulse-emergency 1s infinite;
+        }
+
+        .squawk-vfr {
+            color: #3B82F6 !important;
+        }
+
+        @keyframes pulse-emergency {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* CRIME */
+        .crime-row {
+            font-size: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .crime-row:hover {
+            background: #1a1a2e;
+        }
+
+        .crime-row.focused {
+            background: rgba(74, 143, 160, 0.2);
+        }
+
+        .crime-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .crime-assault { background: #c96c6c; box-shadow: 0 0 6px #c96c6c; }
+        .crime-robbery { background: #d4a574; box-shadow: 0 0 6px #d4a574; }
+        .crime-burglary { background: #9884c4; box-shadow: 0 0 6px #9884c4; }
+        .crime-theft { background: #6b9bc4; box-shadow: 0 0 6px #6b9bc4; }
+        .crime-vandalism { background: #6eb3c4; box-shadow: 0 0 6px #6eb3c4; }
+
+        .crime-pulse {
+            animation: crime-pulse 2s infinite;
+        }
+
+        @keyframes crime-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* THREAT MATRIX */
+        .threat-legend {
+            padding: 10px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .threat-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 9px;
+        }
+
+        /* TELEMETRY */
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            padding: 2px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+
+        .telemetry-label {
+            color: #6b7280;
+        }
+
+        .telemetry-value {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        /* LOGS */
+        .log-line {
+            font-size: 7px;
+            padding: 1px 0;
+            color: #6b7280;
+        }
+
+        .log-timestamp {
+            color: #6eb3c4;
+            margin-right: 4px;
+        }
+
+        .log-info { color: #6ea87d; }
+        .log-warn { color: #d4a574; }
+        .log-error { color: #c96c6c; }
+
+        /* POLICE SCANNER - FULL HEIGHT RIGHT PANEL */
+        .scanner-controls {
+            background: #1f2429;
+            padding: 8px;
+            border: 1px solid #4a8fa0;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+
+        .scanner-button {
+            background: #6eb3c4;
+            border: none;
+            color: #000;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-family: 'Courier New';
+            font-size: 9px;
+            font-weight: bold;
+            border-radius: 2px;
+        }
+
+        .scanner-transcript-container {
+            flex: 1;
+            background: #000;
+            border: 1px solid #4a8fa0;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 0;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar-thumb {
+            background: #4a8fa0;
+            border-radius: 3px;
+        }
+
+        .transcript-entry {
+            padding: 8px;
+            background: rgba(110, 179, 196, 0.1);
+            margin-bottom: 4px;
+            border-left: 2px solid #6eb3c4;
+            flex-shrink: 0;
+        }
+
+        .transcript-time {
+            color: #6eb3c4;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .transcript-unit {
+            color: #d4a574;
+            font-size: 14px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .transcript-msg {
+            color: #a8b2bc;
+            font-size: 16px;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        /* MENU BAR */
+        .menu-bar {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 4px 12px;
+            font-size: 9px;
+            display: flex;
+            gap: 20px;
+            color: #7a8893;
+        }
+
+        .menu-item {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .menu-item:hover {
+            color: #6eb3c4;
+        }
+
+        .menu-key {
+            color: #6eb3c4;
+            font-weight: bold;
+            margin-right: 2px;
+        }
+
+        /* MODAL OVERLAY */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1a1f26;
+            border: 2px solid #6eb3c4;
+            padding: 20px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 0 30px rgba(110, 179, 196, 0.5);
+        }
+
+        .modal-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #4a8fa0;
+        }
+
+        .modal-close {
+            color: #7a8893;
+            font-size: 10px;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #4a8fa0;
+            text-align: center;
+        }
+
+        .footer {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 4px 12px;
+            font-size: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            color: #7a8893;
+        }
+
+        .footer-top {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .marquee-container {
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+            padding: 4px 8px;
+            overflow: hidden;
+            height: 20px;
+            position: relative;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 60s linear infinite;
+            padding-left: 100%;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .marquee-item {
+            display: inline-block;
+            margin-right: 40px;
+            color: #6ea87d;
+            font-size: 8px;
+        }
+
+        .marquee-item.traffic {
+            color: #d4a574;
+        }
+
+        .marquee-item.crime {
+            color: #c96c6c;
+        }
+
+        /* === LIVE TRAFFIC CAMERAS === */
+        .cam-panel {
+            grid-row: 3 / 4;
+            grid-column: 1 / 4;
+            min-height: 0;
+        }
+
+        .cam-strip {
+            display: flex;
+            gap: 5px;
+            overflow: hidden;
+            position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .cam-tile {
+            min-width: 192px;
+            width: 192px;
+            flex: 0 0 192px;
+            border: 1px solid #4a8fa0;
+            background: #000;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .cam-tile img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.92;
+            border: none;
+        }
+
+        .cam-tile .cam-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 18, 28, 0.85);
+            color: #9fd3e0;
+            font-size: 8px;
+            padding: 2px 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cam-tile .cam-src {
+            position: absolute;
+            top: 2px;
+            right: 3px;
+            font-size: 7px;
+            font-weight: bold;
+            color: #0d0518;
+            padding: 0 3px;
+            border-radius: 2px;
+        }
+
+        .cam-tile.selected {
+            border-color: #22D3EE;
+            box-shadow: 0 0 8px #22D3EE;
+        }
+
+        .cam-tile.offline {
+            border-color: #7f1d1d;
+        }
+
+        .cam-tile.offline img {
+            opacity: 0.25;
+        }
+
+        .cam-modal-body {
+            height: calc(100vh - 150px);
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .cam-modal-body img,
+        .cam-modal-body video {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .cam-modal-meta {
+            color: #6b7280;
+            font-size: 9px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">R510 COMMAND CENTER /// ORBITAL NODE-01</div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="adsb-status"></div>
+                    <span>ADS-B</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot offline" id="shaggoth-status"></div>
+                    <span>SHAGGOTH-A1</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="crime-status"></div>
+                    <span>CRIME</span>
+                </div>
+                <span id="timestamp">LOADING...</span>
+            </div>
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div style="display: flex; flex-direction: column; gap: 3px; grid-row: 1 / 3;">
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ THREAT MATRIX</div>
+                    <div class="panel-content">
+                        <div class="threat-legend">
+                            <div style="margin-bottom: 10px; font-size: 8px; color: #6b7280; text-align: center;">SEVERITY CLASSIFICATION</div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-assault"></div>
+                                <span style="color: #EF4444; font-weight: bold;">ASSAULT / VIOLENCE</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-robbery"></div>
+                                <span style="color: #F59E0B; font-weight: bold;">ROBBERY / ARMED</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-burglary"></div>
+                                <span style="color: #8B5CF6; font-weight: bold;">BURGLARY</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-theft"></div>
+                                <span style="color: #3B82F6; font-weight: bold;">THEFT / LARCENY</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-vandalism"></div>
+                                <span style="color: #22D3EE; font-weight: bold;">VANDALISM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ FLIGHTS (<span id="flight-count">0</span>)</div>
+                    <div class="panel-content" id="flights"></div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ CRIME SCANNER (<span id="crime-count">0</span>)</div>
+                    <div class="panel-content" id="crime"></div>
+                </div>
+            </div>
+
+            <!-- CENTER MAP -->
+            <div class="panel" style="grid-row: 1 / 2;">
+                <div class="panel-title">◢ AIRSPACE - OMAHA SECTOR</div>
+                <div id="map"></div>
+            </div>
+
+            <!-- ACTIVE INCIDENT (CENTER BOTTOM) -->
+            <div class="panel" style="grid-row: 2 / 3;">
+                <div class="panel-title">◢ ACTIVE INCIDENT: <span id="focused-crime-name">INITIALIZING...</span></div>
+                <div class="panel-content" id="crime-details"></div>
+            </div>
+
+            <!-- RIGHT COLUMN - POLICE SCANNER FULL HEIGHT -->
+            <div class="panel" style="grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0;">
+                <div class="panel-title">◢ OMAHA POLICE SCANNER - <span id="scanner-status">OFFLINE</span></div>
+                <div class="scanner-controls">
+                    <button id="scanner-play" onclick="window.toggleScanner()" class="scanner-button">
+                        ▶ PLAY
+                    </button>
+                    <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
+                        <div id="scanner-pulse" style="width: 8px; height: 8px; background: #6eb3c4; border-radius: 50%; box-shadow: 0 0 6px #6eb3c4; animation: pulse-dot 2s infinite;"></div>
+                        <span style="color: #6eb3c4; font-size: 8px; font-weight: bold;">BROADCASTIFY</span>
+                    </div>
+                    <div style="color: #7a8893; font-size: 7px;">OPD MAIN</div>
+                </div>
+
+                <!-- Transcript Container - Newest at BOTTOM -->
+                <div class="scanner-transcript-container" id="scanner-transcript">
+                    <div style="color: #6eb3c4; padding: 30px; text-align: center; font-size: 16px; font-weight: bold;">
+                        ▶ PRESS PLAY BUTTON ABOVE TO START
+                    </div>
+                </div>
+
+                <!-- Audio element (hidden) -->
+                <audio id="scanner-audio" style="display: none;" preload="none"></audio>
+            </div>
+
+            <!-- LIVE TRAFFIC CAMERAS (full-width bottom strip) -->
+            <div class="panel cam-panel">
+                <div class="panel-title">
+                    ◢ LIVE TRAFFIC CAMERAS
+                    (<span id="cam-count">0</span>)
+                    <span style="color: #6b7280;">NDOT · IOWA DOT · WOWT</span>
+                    <span style="float: right; color: #6b7280;">[C] TOGGLE MAP LAYER · CLICK A CAM TO ENLARGE</span>
+                </div>
+                <div class="cam-strip" id="cam-strip"></div>
+            </div>
+        </div>
+
+        <!-- MENU BAR -->
+        <div class="menu-bar">
+            <div class="menu-item" onclick="window.showModal('telemetry')">
+                <span class="menu-key">[T]</span>TELEMETRY
+            </div>
+            <div class="menu-item" onclick="window.showModal('logs')">
+                <span class="menu-key">[L]</span>SYSTEM LOGS
+            </div>
+            <div class="menu-item" onclick="window.showModal('journal')">
+                <span class="menu-key">[J]</span>JOURNAL
+            </div>
+            <div class="menu-item" onclick="window.toggleCamLayer()">
+                <span class="menu-key">[C]</span>CAMERAS
+            </div>
+            <span style="margin-left: auto; color: #4a8fa0;">PRESS [ESC] TO CLOSE PANELS</span>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div class="footer-top">
+                <span>CLASSIFIED /// ORBITAL COMMAND</span>
+                <span>NODE: R510-ALPHA /// OMAHA SURVEILLANCE</span>
+                <span id="uptime">UPTIME: 00:00:00</span>
+            </div>
+            <div class="marquee-container">
+                <div class="marquee-content" id="news-marquee">
+                    <span class="marquee-item">LOADING NEWS FEED...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OVERLAY -->
+    <div class="modal-overlay" id="modal-overlay" onclick="window.closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title" id="modal-title">PANEL</div>
+            <div id="modal-body"></div>
+            <div class="modal-close">PRESS [ESC] OR CLICK OUTSIDE TO CLOSE</div>
+        </div>
+    </div>
+
+    <script>
+        // GLOBAL STATE
+        const CONFIG = {
+            DUMP1090_URL: 'http://192.168.0.169:8080/data/aircraft.json',
+            MAP_CENTER: [41.2565, -95.9345],
+            MAP_ZOOM: 11,
+            UPDATE_INTERVAL: 2000,
+            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460'
+        };
+
+        let map, aircraftMarkers = {}, crimeMarkers = [];
+        let aircraft = [], crimeData = [];
+        let currentFocusedCrimeIndex = 0;
+        let scannerPlaying = false, scannerAudio = null;
+        let transcriptInterval = null;  // Track interval to prevent duplicates
+
+        // Safe DOM getter
+        function safeGet(id) {
+            try {
+                return document.getElementById(id);
+            } catch (err) {
+                console.error(`Error getting element '${id}':`, err);
+                return null;
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 't' || e.key === 'T') window.showModal('telemetry');
+            if (e.key === 'l' || e.key === 'L') window.showModal('logs');
+            if (e.key === 'j' || e.key === 'J') window.showModal('journal');
+            if (e.key === 'Escape') window.closeModal();
+        });
+
+        window.showModal = function(type) {
+            const overlay = safeGet('modal-overlay');
+            const title = safeGet('modal-title');
+            const body = safeGet('modal-body');
+            if (!overlay || !title || !body) return;
+
+            overlay.classList.add('active');
+
+            if (type === 'telemetry') {
+                title.textContent = '◢ SYSTEM TELEMETRY';
+                body.innerHTML = '<div id="modal-telemetry"></div>';
+                updateTelemetry(true);
+            } else if (type === 'logs') {
+                title.textContent = '◢ SYSTEM LOGS';
+                body.innerHTML = '<div id="modal-logs"></div>';
+                updateLogsModal();
+            } else if (type === 'journal') {
+                title.textContent = '◢ OPERATIONAL JOURNAL';
+                body.innerHTML = `
+                    <div style="color: #a8b2bc; font-size: 10px; line-height: 1.6;">
+                        <p style="margin-bottom: 10px;">R510 COMMAND CENTER - OPERATIONAL LOG</p>
+                        <p style="color: #6b7280;">Mission Status: ACTIVE</p>
+                        <p style="color: #6b7280;">Systems: ALL NOMINAL</p>
+                        <p style="color: #6b7280;">Next Review: 00:00 UTC</p>
+                    </div>
+                `;
+            }
+        };
+
+        window.closeModal = function() {
+            const overlay = safeGet('modal-overlay');
+            if (overlay) overlay.classList.remove('active');
+        };
+
+        function updateLogsModal() {
+            const container = document.getElementById('modal-logs');
+            if (!container) return;
+            container.innerHTML = logBuffer.map(log => `
+                <div class="log-line log-${log.level}">
+                    <span class="log-timestamp">[${log.timestamp}]</span>
+                    ${log.message}
+                </div>
+            `).join('');
+        }
+
+        function initMap() {
+            try {
+                map = L.map('map', {
+                    center: CONFIG.MAP_CENTER,
+                    zoom: CONFIG.MAP_ZOOM,
+                    zoomControl: true
+                });
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OSM',
+                    maxZoom: 19,
+                    className: 'map-tiles-dark'
+                }).addTo(map);
+
+                addLog('info', 'OPENSTREETMAP INITIALIZED');
+                fetchAircraftData();
+
+                setTimeout(() => {
+                    try {
+                        generateCrimeData();
+                        if (crimeData.length > 0) focusOnCrime(0);
+                    } catch (err) {
+                        console.error('Crime setup error:', err);
+                        addLog('error', 'CRIME INIT ERROR');
+                    }
+                }, 1000);
+            } catch (err) {
+                console.error('Map init error:', err);
+                addLog('error', 'MAP INIT FAILED');
+            }
+        }
+
+        function getSquawkColor(squawk) {
+            if (!squawk) return '#6ea87d';
+            if (['7500', '7600', '7700'].includes(squawk)) return '#c96c6c';
+            if (squawk === '1200') return '#6b9bc4';
+            return '#6ea87d';
+        }
+
+        function getSquawkClass(squawk) {
+            if (['7500', '7600', '7700'].includes(squawk)) return 'squawk-emergency';
+            if (squawk === '1200') return 'squawk-vfr';
+            return '';
+        }
+
+        function isEmergencySquawk(squawk) {
+            return squawk && ['7500', '7600', '7700'].includes(squawk);
+        }
+
+        function createAircraftIcon(color, rotation = 0, isEmergency = false) {
+            const pulse = isEmergency ? '<circle cx="8" cy="8" r="8" fill="#EF4444" opacity="0.3"><animate attributeName="r" from="4" to="12" dur="1.5s" repeatCount="indefinite" /><animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite" /></circle>' : '';
+            return L.divIcon({
+                html: `<svg width="24" height="24" viewBox="0 0 16 16">${pulse}<g transform="rotate(${rotation} 8 8)"><path d="M 8 2 L 10 12 L 8 11 L 6 12 Z" fill="${color}" stroke="#000" stroke-width="0.5"/></g></svg>`,
+                className: '',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        async function fetchAircraftData() {
+            try {
+                const response = await fetch(CONFIG.DUMP1090_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                aircraft = (data.aircraft || []).map(ac => ({
+                    ...ac,
+                    color: getSquawkColor(ac.squawk),
+                    squawkClass: getSquawkClass(ac.squawk),
+                    isEmergency: isEmergencySquawk(ac.squawk)
+                }));
+                updateAircraftMarkers();
+                updateFlightList();
+                const el = safeGet('adsb-status');
+                if (el) el.className = 'status-dot';
+            } catch (error) {
+                const el = safeGet('adsb-status');
+                if (el) el.className = 'status-dot offline';
+            }
+        }
+
+        function updateAircraftMarkers() {
+            try {
+                const currentHexes = new Set();
+                aircraft.forEach(ac => {
+                    try {
+                        if (!ac.lat || !ac.lon) return;
+                        currentHexes.add(ac.hex);
+                        if (aircraftMarkers[ac.hex]) {
+                            aircraftMarkers[ac.hex].setLatLng([ac.lat, ac.lon]);
+                            aircraftMarkers[ac.hex].setIcon(createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency));
+                        } else {
+                            const marker = L.marker([ac.lat, ac.lon], {
+                                icon: createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency)
+                            }).addTo(map);
+                            const squawkInfo = ac.squawk ? `<br>Squawk: <strong style="color: ${ac.color};">${ac.squawk}</strong>` : '';
+                            marker.bindPopup(`<div style="font-family: monospace; font-size: 10px;"><strong style="color: ${ac.color};">${(ac.flight || ac.hex).trim()}</strong>${squawkInfo}<br>Alt: ${ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A'}<br>Speed: ${ac.gs ? Math.round(ac.gs) + 'kts' : 'N/A'}</div>`);
+                            aircraftMarkers[ac.hex] = marker;
+                            if (ac.isEmergency) addLog('error', `EMERGENCY SQUAWK ${ac.squawk}: ${(ac.flight || ac.hex).trim()}`);
+                        }
+                    } catch (err) {
+                        console.error(`Marker error ${ac.hex}:`, err);
+                    }
+                });
+                Object.keys(aircraftMarkers).forEach(hex => {
+                    if (!currentHexes.has(hex)) {
+                        try {
+                            map.removeLayer(aircraftMarkers[hex]);
+                            delete aircraftMarkers[hex];
+                        } catch (err) {}
+                    }
+                });
+            } catch (err) {
+                console.error('updateAircraftMarkers error:', err);
+            }
+        }
+
+        function updateFlightList() {
+            try {
+                const container = safeGet('flights');
+                const countEl = safeGet('flight-count');
+                if (countEl) countEl.textContent = aircraft.length;
+                if (!container) return;
+                if (aircraft.length === 0) {
+                    container.innerHTML = '<div style="color: #6b7280; padding: 10px; text-align: center;">NO AIRCRAFT</div>';
+                    return;
+                }
+                container.innerHTML = aircraft.slice(0, 20).map(ac => {
+                    const callsign = (ac.flight || ac.hex).trim();
+                    const alt = ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A';
+                    return `<div class="flight-row"><div><span class="flight-marker" style="background: ${ac.color};"></span><span class="flight-callsign ${ac.squawkClass}">${callsign}</span></div><div style="color: #6b7280; font-size: 7px;">${alt}</div></div>`;
+                }).join('');
+            } catch (err) {
+                console.error('updateFlightList error:', err);
+            }
+        }
+
+        const CRIME_TYPES = [
+            { type: 'ASSAULT', class: 'crime-assault', color: '#c96c6c', urgency: 10, urgencyLabel: 'HIGH' },
+            { type: 'ROBBERY', class: 'crime-robbery', color: '#d4a574', urgency: 9, urgencyLabel: 'HIGH' },
+            { type: 'BURGLARY', class: 'crime-burglary', color: '#9884c4', urgency: 7, urgencyLabel: 'MEDIUM' },
+            { type: 'THEFT', class: 'crime-theft', color: '#6b9bc4', urgency: 5, urgencyLabel: 'LOW' },
+            { type: 'VANDALISM', class: 'crime-vandalism', color: '#6eb3c4', urgency: 3, urgencyLabel: 'LOW' }
+        ];
+
+        const STREET_NAMES = ['DODGE', 'PACIFIC', 'FARNAM', 'CAPITOL', 'LEAVENWORTH', 'CUMING', 'CALIFORNIA', 'BURT'];
+
+        function generateCrimeData() {
+            try {
+                const previousHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+                crimeData = Array.from({ length: 12 }, () => {
+                    const crimeType = CRIME_TYPES[Math.floor(Math.random() * CRIME_TYPES.length)];
+                    const now = new Date();
+                    const minutesAgo = Math.floor(Math.random() * 120);
+                    const crimeTime = new Date(now - minutesAgo * 60000);
+                    return {
+                        ...crimeType,
+                        lat: CONFIG.MAP_CENTER[0] + (Math.random() - 0.5) * 0.1,
+                        lng: CONFIG.MAP_CENTER[1] + (Math.random() - 0.5) * 0.1,
+                        location: `${Math.floor(Math.random() * 9000 + 1000)} ${STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]} ST`,
+                        time: crimeTime.toLocaleTimeString(),
+                        minutesAgo: minutesAgo,
+                        status: minutesAgo < 30 ? 'ACTIVE' : 'LOGGED',
+                        units: Math.floor(Math.random() * 3) + 1,
+                        reportId: `R510-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+                    };
+                });
+                crimeData.sort((a, b) => b.urgency - a.urgency);
+                const newHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+                const isNewCrime = !previousHighPriority || (newHighPriority && newHighPriority.reportId !== previousHighPriority.reportId);
+                updateCrimeMarkers();
+                updateCrimeList();
+                const el = safeGet('crime-status');
+                if (el) el.className = 'status-dot';
+                if (isNewCrime && newHighPriority) {
+                    const newIndex = crimeData.findIndex(c => c.reportId === newHighPriority.reportId);
+                    if (newIndex !== -1) {
+                        focusOnCrime(newIndex);
+                        addLog('error', `HIGH PRIORITY: ${newHighPriority.type} at ${newHighPriority.location}`);
+                    } else {
+                        updateCrimeDetails();
+                    }
+                } else {
+                    updateCrimeDetails();
+                }
+            } catch (err) {
+                console.error('generateCrimeData error:', err);
+                addLog('error', 'CRIME DATA ERROR');
+            }
+        }
+
+        function updateCrimeMarkers() {
+            try {
+                crimeMarkers.forEach(m => {
+                    try { map.removeLayer(m); } catch (e) {}
+                });
+                crimeMarkers = [];
+                crimeData.forEach((crime, idx) => {
+                    try {
+                        const icon = L.divIcon({
+                            html: `<div style="width: 12px; height: 12px; background: ${crime.color}; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 8px ${crime.color};" class="${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>`,
+                            className: '',
+                            iconSize: [12, 12],
+                            iconAnchor: [6, 6]
+                        });
+                        const marker = L.marker([crime.lat, crime.lng], { icon }).addTo(map);
+                        marker.bindPopup(`<div style="font-family: monospace; font-size: 10px;"><strong style="color: ${crime.color};">${crime.type}</strong><br>${crime.location}<br>${crime.time} (${crime.minutesAgo}m ago)<br><span style="color: #6b7280;">ID: ${crime.reportId}</span></div>`);
+                        marker.on('click', () => focusOnCrime(idx));
+                        crimeMarkers.push(marker);
+                    } catch (err) {}
+                });
+            } catch (err) {
+                console.error('updateCrimeMarkers error:', err);
+            }
+        }
+
+        function updateCrimeList() {
+            try {
+                const container = safeGet('crime');
+                const countEl = safeGet('crime-count');
+                if (countEl) countEl.textContent = crimeData.length;
+                if (!container) return;
+                container.innerHTML = crimeData.map((crime, idx) => `
+                    <div class="crime-row ${idx === currentFocusedCrimeIndex ? 'focused' : ''}" onclick="focusOnCrime(${idx})">
+                        <div class="crime-marker ${crime.class} ${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>
+                        <div style="flex: 1;">
+                            <div style="color: ${crime.color}; font-weight: bold;">${crime.type}</div>
+                            <div style="color: #6b7280; font-size: 7px;">${crime.location} • ${crime.minutesAgo}m ago</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {}
+        }
+
+        function updateCrimeDetails() {
+            try {
+                const container = safeGet('crime-details');
+                if (!container) return;
+                const crime = crimeData[currentFocusedCrimeIndex];
+                if (!crime) {
+                    container.innerHTML = '<div style="color: #6b7280; padding: 10px; text-align: center;">NO INCIDENT DATA</div>';
+                    return;
+                }
+                const nameEl = safeGet('focused-crime-name');
+                if (nameEl) nameEl.textContent = crime.type;
+                container.innerHTML = `
+                    <div class="crime-detail-card focused">
+                        <div class="crime-detail-header">
+                            <div class="crime-detail-type" style="color: ${crime.color};">
+                                <div class="crime-marker ${crime.class}"></div>
+                                ${crime.type}
+                            </div>
+                            <div class="crime-detail-urgency ${crime.urgencyLabel.toLowerCase()}">${crime.urgencyLabel} PRIORITY</div>
+                        </div>
+                        <div class="crime-detail-info">
+                            <div class="crime-detail-row"><span class="crime-detail-label">REPORT ID:</span><span>${crime.reportId}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">LOCATION:</span><span>${crime.location}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">TIME:</span><span>${crime.time} (${crime.minutesAgo} minutes ago)</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">STATUS:</span><span style="color: ${crime.status === 'ACTIVE' ? '#EF4444' : '#10b981'};">${crime.status}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">UNITS:</span><span>${crime.units} dispatched</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">COORD:</span><span style="font-family: monospace; font-size: 7px;">${crime.lat.toFixed(5)}, ${crime.lng.toFixed(5)}</span></div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {}
+        }
+
+        function focusOnCrime(index) {
+            try {
+                if (index < 0 || index >= crimeData.length) return;
+                currentFocusedCrimeIndex = index;
+                const crime = crimeData[index];
+                if (!crime) return;
+                map.setView([crime.lat, crime.lng], 14, { animate: true });
+                if (crimeMarkers[index]) crimeMarkers[index].openPopup();
+                updateCrimeList();
+                updateCrimeDetails();
+                addLog('warn', `FOCUS: ${crime.type} at ${crime.location}`);
+            } catch (err) {}
+        }
+
+        function updateTelemetry(isModal = false) {
+            try {
+                const metrics = [
+                    { label: 'GPU', value: `${Math.floor(Math.random() * 30 + 65)}%` },
+                    { label: 'VRAM', value: `${Math.floor(Math.random() * 10 + 38)}GB` },
+                    { label: 'TPS', value: Math.floor(Math.random() * 50 + 120) }
+                ];
+                const containerId = isModal ? 'modal-telemetry' : 'telemetry';
+                const container = safeGet(containerId);
+                if (!container) return;
+                container.innerHTML = metrics.map(m => `
+                    <div class="telemetry-row">
+                        <span class="telemetry-label">${m.label}</span>
+                        <span class="telemetry-value">${m.value}</span>
+                    </div>
+                `).join('');
+            } catch (err) {}
+        }
+
+        const logBuffer = [];
+        function addLog(level, message) {
+            try {
+                const timestamp = new Date().toLocaleTimeString();
+                logBuffer.unshift({ timestamp, level, message });
+                if (logBuffer.length > 100) logBuffer.pop();
+            } catch (err) {}
+        }
+
+        let uptimeSeconds = 0;
+        function updateTimestamp() {
+            try {
+                const timestampEl = safeGet('timestamp');
+                const uptimeEl = safeGet('uptime');
+                if (timestampEl) timestampEl.textContent = new Date().toLocaleString();
+                uptimeSeconds++;
+                const h = Math.floor(uptimeSeconds / 3600);
+                const m = Math.floor((uptimeSeconds % 3600) / 60);
+                const s = uptimeSeconds % 60;
+                if (uptimeEl) uptimeEl.textContent = `UPTIME: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            } catch (err) {}
+        }
+
+        async function fetchNewsMarquee() {
+            try {
+                const response = await fetch('http://192.168.0.169:8423/feeds');
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                const marquee = safeGet('news-marquee');
+                if (!marquee) return;
+                if (data.items && data.items.length > 0) {
+                    marquee.innerHTML = data.items.map(item => {
+                        const type = item.type === 'news' ? 'news' : 'general';
+                        const color = type === 'news' ? 'traffic' : '';
+                        return `<span class="marquee-item ${color}">【${type.toUpperCase()}】${item.title}</span>`;
+                    }).join('');
+                } else {
+                    marquee.innerHTML = '<span class="marquee-item">NO NEWS FEED</span>';
+                }
+            } catch (error) {
+                const marquee = safeGet('news-marquee');
+                if (marquee) marquee.innerHTML = '<span class="marquee-item">NEWS FEED OFFLINE</span>';
+            }
+        }
+
+        // POLICE SCANNER - ULTRA-SAFE VERSION
+        window.toggleScanner = function() {
+            console.log('toggleScanner() called, scannerPlaying:', scannerPlaying);
+            try {
+                const container = safeGet('scanner-transcript');
+                const playBtn = safeGet('scanner-play');
+                const statusSpan = safeGet('scanner-status');
+
+                console.log('Elements found:', {
+                    container: !!container,
+                    playBtn: !!playBtn,
+                    statusSpan: !!statusSpan
+                });
+
+                if (!container || !playBtn || !statusSpan) {
+                    console.error('Scanner elements missing');
+                    addLog('error', 'SCANNER: UI ERROR');
+                    return;
+                }
+
+                if (!scannerPlaying) {
+                    console.log('Starting scanner...');
+                    // START SCANNER
+                    scannerPlaying = true;
+                    playBtn.textContent = '⏸ PAUSE';
+                    playBtn.style.background = '#c96c6c';
+                    statusSpan.textContent = 'LIVE';
+                    statusSpan.style.color = '#c96c6c';
+
+                    // Clear container safely
+                    try {
+                        container.innerHTML = '<div style="color: #6eb3c4; padding: 10px; text-align: center;">Starting transcripts...</div>';
+                    } catch (e) {
+                        console.error('Failed to clear container:', e);
+                    }
+
+                    // Try audio (may fail due to autoplay policy)
+                    scannerAudio = scannerAudio || safeGet('scanner-audio');
+                    if (scannerAudio) {
+                        try {
+                            scannerAudio.src = CONFIG.SCANNER_STREAM;
+                            scannerAudio.play().catch(() => {
+                                console.log('Audio autoplay blocked (expected)');
+                            });
+                        } catch (e) {
+                            console.warn('Audio setup failed:', e);
+                        }
+                    }
+
+                    // Start transcription with safety checks
+                    console.log('About to call startTranscription()...');
+                    try {
+                        startTranscription();
+                        console.log('startTranscription() returned successfully');
+                    } catch (e) {
+                        console.error('startTranscription() crashed:', e);
+                        addLog('error', 'SCANNER: TRANSCRIPT INIT FAILED');
+                        return;
+                    }
+                    addLog('info', 'SCANNER: STARTED');
+                } else {
+                    // STOP SCANNER
+                    if (scannerAudio) scannerAudio.pause();
+                    scannerPlaying = false;
+                    playBtn.textContent = '▶ PLAY';
+                    playBtn.style.background = '#6eb3c4';
+                    statusSpan.textContent = 'PAUSED';
+                    statusSpan.style.color = '#7a8893';
+
+                    // Stop transcript interval
+                    if (transcriptInterval) {
+                        clearInterval(transcriptInterval);
+                        transcriptInterval = null;
+                    }
+
+                    addLog('info', 'SCANNER: PAUSED');
+                }
+            } catch (err) {
+                console.error('toggleScanner error:', err);
+                addLog('error', 'SCANNER: TOGGLE ERROR');
+            }
+        };
+
+        // Transcript buffer at module level (persistent)
+        let transcriptBuffer = [];
+        let transcriptIndex = 0;
+
+        function startTranscription() {
+            console.log('startTranscription() called');
+            try {
+                const container = safeGet('scanner-transcript');
+                if (!container) {
+                    console.error('Transcript container not found in startTranscription');
+                    return;
+                }
+                console.log('Container found:', container.id);
+
+                const transcripts = [
+                    { unit: 'UNIT 214', msg: 'Responding to 4200 Dodge Street, possible 10-91D' },
+                    { unit: 'DISPATCH', msg: 'Copy that 214, backup en route' },
+                    { unit: 'UNIT 189', msg: '10-97, ETA 3 minutes' },
+                    { unit: 'UNIT 214', msg: '10-23, scene secure' },
+                    { unit: 'UNIT 214', msg: 'Requesting supervisor, possible 10-32' },
+                    { unit: 'SGT 05', msg: '10-76 to your location' },
+                    { unit: 'UNIT 189', msg: '10-97 on scene' },
+                    { unit: 'DISPATCH', msg: 'All units advised, suspect vehicle westbound on Dodge' }
+                ];
+
+                // Clear buffer and index
+                transcriptBuffer = [];
+                transcriptIndex = 0;
+
+                // Clear any existing interval
+                if (transcriptInterval) {
+                    console.log('Clearing existing interval');
+                    clearInterval(transcriptInterval);
+                    transcriptInterval = null;
+                }
+
+                // Function to render ALL transcripts at once
+                function renderTranscripts() {
+                    try {
+                        const c = safeGet('scanner-transcript');
+                        if (!c) {
+                            console.error('Container disappeared');
+                            return;
+                        }
+
+                        // Build HTML string (safe, no DOM manipulation)
+                        const html = transcriptBuffer.map(item => `
+                            <div class="transcript-entry">
+                                <div>
+                                    <span class="transcript-time">[${item.time}]</span>
+                                    <span class="transcript-unit">${item.unit}</span>
+                                </div>
+                                <div class="transcript-msg">${item.msg}</div>
+                            </div>
+                        `).join('');
+
+                        // Set innerHTML once (much safer than appendChild)
+                        c.innerHTML = html;
+
+                        // Safe scroll
+                        try {
+                            if (c.scrollTop !== undefined) {
+                                c.scrollTop = c.scrollHeight || 99999;
+                            }
+                        } catch (e) {
+                            console.warn('Scroll failed:', e);
+                        }
+                    } catch (err) {
+                        console.error('renderTranscripts error:', err);
+                    }
+                }
+
+                // Function to add transcript to buffer
+                function addTranscript() {
+                    console.log('addTranscript() called, index:', transcriptIndex);
+                    try {
+                        if (!scannerPlaying) {
+                            console.log('Scanner not playing, skipping');
+                            return;
+                        }
+
+                        const t = transcripts[transcriptIndex % transcripts.length];
+                        const timeStr = new Date().toLocaleTimeString();
+                        console.log('Adding transcript:', t.unit, t.msg.substring(0, 30));
+
+                        // Add to buffer
+                        transcriptBuffer.push({
+                            time: timeStr,
+                            unit: t.unit,
+                            msg: t.msg
+                        });
+
+                        // Keep only last 20
+                        if (transcriptBuffer.length > 20) {
+                            transcriptBuffer.shift();
+                        }
+
+                        console.log('Buffer size:', transcriptBuffer.length, 'About to render...');
+                        // Render all transcripts
+                        renderTranscripts();
+                        console.log('Render complete');
+
+                        transcriptIndex++;
+
+                        if (t.msg.includes('10-91') || t.msg.includes('10-32')) {
+                            addLog('warn', `SCANNER: ${t.msg.substring(0, 40)}`);
+                        }
+                    } catch (err) {
+                        console.error('addTranscript CRASHED:', err);
+                        console.error('Error stack:', err.stack);
+                    }
+                }
+
+                // Add first message immediately
+                console.log('Adding first transcript...');
+                addTranscript();
+                console.log('First transcript added');
+
+                // Start interval for new messages
+                console.log('Starting interval...');
+                transcriptInterval = setInterval(() => {
+                    console.log('Interval tick');
+                    if (!scannerPlaying) {
+                        console.log('Scanner stopped, clearing interval');
+                        if (transcriptInterval) {
+                            clearInterval(transcriptInterval);
+                            transcriptInterval = null;
+                        }
+                        return;
+                    }
+                    addTranscript();
+                }, 8000);
+                console.log('Interval started, ID:', transcriptInterval);
+
+            } catch (err) {
+                console.error('startTranscription error:', err);
+                addLog('error', 'SCANNER: TRANSCRIPT ERROR');
+            }
+        }
+
+        // INITIALIZE
+        console.log('R510 Dashboard initializing...');
+        updateTelemetry();
+        addLog('info', 'R510 COMMAND CENTER INITIALIZED');
+        addLog('info', 'CRIME SURVEILLANCE ACTIVE');
+
+        // Wait for DOM to be fully ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initMap);
+        } else {
+            initMap();
+        }
+
+        setTimeout(fetchNewsMarquee, 2000);
+
+        // DISABLED: Auto-start scanner (use manual button instead)
+        // setTimeout(() => {
+        //     try {
+        //         const container = safeGet('scanner-transcript');
+        //         if (container) {
+        //             window.toggleScanner();
+        //             addLog('info', 'SCANNER: AUTO-STARTED');
+        //         } else {
+        //             console.error('Scanner container not ready');
+        //         }
+        //     } catch (err) {
+        //         console.error('Scanner auto-start failed:', err);
+        //     }
+        // }, 5000);
+
+        // Set up intervals
+        setInterval(() => fetchAircraftData(), CONFIG.UPDATE_INTERVAL);
+        setInterval(updateTimestamp, 1000);
+        setInterval(updateTelemetry, 3000);
+        setInterval(() => {
+            try {
+                generateCrimeData();
+                addLog('info', 'CRIME DATA REFRESH');
+            } catch (err) {}
+        }, 60000);
+        setInterval(() => {
+            fetchNewsMarquee();
+            addLog('info', 'NEWS FEED REFRESH');
+        }, 300000);
+
+        setTimeout(() => addLog('info', 'ADS-B ONLINE'), 2000);
+        setTimeout(() => addLog('warn', 'SHAGGOTH-A1 OFFLINE'), 3000);
+
+        // === LIVE TRAFFIC CAMERAS ===
+const KIOSK_CAMS = [{"i":"vid-002","n":"D2-480-2.25 Omaha · Dodge St.","la":41.26415993981037,"lo":-95.95244691293136,"u":"https://dot511.nebraska.gov/images/vid-002480002-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-Camera 07 · I-480","la":41.26243391552831,"lo":-95.95334679509034,"u":"https://dot511.nebraska.gov/images/vid-002075091-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-364.20 Omaha · Dodge St. @ 118th St","la":41.26297569601963,"lo":-96.0975730851099,"u":"https://dot511.nebraska.gov/images/vid-002006365-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-365.02 Omaha · Dodge St. @ 102nd St","la":41.263437275438065,"lo":-96.0784566605683,"u":"https://dot511.nebraska.gov/images/vid-002006365-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-85.95 Omaha · Gilmore Bridge","la":41.1972627903264,"lo":-95.94291042582465,"u":"https://dot511.nebraska.gov/images/vid-002075086-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-439.25 Omaha · N-370","la":41.1475006076915,"lo":-96.15784797834709,"u":"https://dot511.nebraska.gov/images/vid-002080439-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-443.01 Omaha · 126th Street","la":41.186739082183905,"lo":-96.10527861648266,"u":"https://dot511.nebraska.gov/images/vid-002080443-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-454.15 Omaha · 13th Street","la":41.23004840858447,"lo":-95.9335226739476,"u":"https://dot511.nebraska.gov/images/vid-002080455-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-87.07 Omaha · L Street","la":41.21183377473353,"lo":-95.94945765045976,"u":"https://dot511.nebraska.gov/images/vid-002075087-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-448.48 Omaha · 84th Street","la":41.224236676514664,"lo":-96.04364079768354,"u":"https://dot511.nebraska.gov/images/vid-002080448-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-449.30 Omaha · 72nd Street","la":41.2241358881009,"lo":-96.024278420874,"u":"https://dot511.nebraska.gov/images/vid-002080449-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-453.15 Omaha · Jct I-480 at JFK","la":41.225127792335336,"lo":-95.95086857760887,"u":"https://dot511.nebraska.gov/images/vid-002080453-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-452.95 Omaha · JFK I-480","la":41.227928567176185,"lo":-95.95534546155412,"u":"https://dot511.nebraska.gov/images/vid-002080452-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-440.70 · N-50","la":41.162401669902,"lo":-96.13871675071266,"u":"https://dot511.nebraska.gov/images/vid-002080440-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-455.01 Mo Rvr","la":41.23106474642449,"lo":-95.91671547382856,"u":"https://dot511.nebraska.gov/images/vid-002080456-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680001-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-81.96 Bellevue · US-75 & N-370","la":41.1404702698448,"lo":-95.93770035820575,"u":"https://dot511.nebraska.gov/images/vid-002075081-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-83.24 Omaha · US-75 & Cornhusker Rd","la":41.1590291771815,"lo":-95.93840066714745,"u":"https://dot511.nebraska.gov/images/vid-002075083-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-84.45 Omaha · US-75 & Childs Rd","la":41.17656541574595,"lo":-95.94025486778128,"u":"https://dot511.nebraska.gov/images/vid-002075084-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-356.91 Omaha · W Dodge Rd & 204th St","la":41.26260629214376,"lo":-96.2349540755262,"u":"https://dot511.nebraska.gov/images/VID-002006356-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-359.79 Omaha · W Dodge Rd & 168th St","la":41.26268815563066,"lo":-96.17953549340774,"u":"https://dot511.nebraska.gov/images/vid-002006359-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-360.94 Omaha · W Dodge Rd & 156th St","la":41.26339727872328,"lo":-96.15785405463284,"u":"https://dot511.nebraska.gov/images/vid-002006361-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-6-361.93 Omaha · W Dodge Rd & 144th St","la":41.262788015607136,"lo":-96.13853260828084,"u":"https://dot511.nebraska.gov/images/vid-002006362-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-445.06 Omaha · I-80 & L St","la":41.21193898797219,"lo":-96.09214725243466,"u":"https://dot511.nebraska.gov/images/vid-002080445-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-446.26 Omaha · I-80 & 108th St","la":41.22322214190607,"lo":-96.08136589097488,"u":"https://dot511.nebraska.gov/images/vid-002080446-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-453.36 Omaha · I-80 & 24th St","la":41.2260064603159,"lo":-95.94724662713475,"u":"https://dot511.nebraska.gov/images/vid-002080454-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-450.25 Omaha · I-80 & 60th St","la":41.22402937757514,"lo":-96.00514196459716,"u":"https://dot511.nebraska.gov/images/vid-002080450-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-370-10.39 Papilon","la":41.14027806258042,"lo":-96.04256227004116,"u":"https://dot511.nebraska.gov/images/vid-002370010-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-447.32 Omaha","la":41.222708645787485,"lo":-96.06248057955916,"u":"https://dot511.nebraska.gov/images/vid-002080447-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-80-451.78 Omaha · I-80 and JFK I-480","la":41.22485749265013,"lo":-95.97631680883447,"u":"https://dot511.nebraska.gov/images/vid-002080451-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-75-80.32 Bellevue","la":41.117485100791434,"lo":-95.9349972635354,"u":"https://dot511.nebraska.gov/images/vid-002075080-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680002-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680003-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680005-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680006-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680007-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-680-1.29 Omaha · I-680 N of W Center Rd","la":41.240864931882875,"lo":-96.08631579205064,"u":"https://dot511.nebraska.gov/images/vid-002680013-00.jpg","s":"NDOT"},{"i":"vid-002","n":"D2-480-2.25 Omaha · Dodge St.","la":41.26415993981037,"lo":-95.95244691293136,"u":"https://dot511.nebraska.gov/images/vid-002480003-00.jpg","s":"NDOT"},{"i":"59608723","n":"CB - I-680 @ MM 1.1 (130th St)","la":41.346072,"lo":-95.935793,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv74hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv74lb/playlist.m3u8"},{"i":"59608706","n":"CB - I-80 @ MM 4.7 (Woodbury Ave)","la":41.237776,"lo":-95.826199,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv58hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv58lb/playlist.m3u8"},{"i":"59608721","n":"CB - I-29 @ MM 56 (25th St)","la":41.274991,"lo":-95.878115,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv22hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv22lb/playlist.m3u8"},{"i":"59608738","n":"CB - I-680 @ MM 0 (31st St - NE)","la":41.344361,"lo":-95.964687,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv75hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv75lb/playlist.m3u8"},{"i":"59608748","n":"CB - US 275 @ MM 55.6 (11th St)","la":41.220124,"lo":-95.861056,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv27hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv27lb/playlist.m3u8"},{"i":"59608777","n":"CB - I-29 @ MM 44.6 (192nd St)","la":41.174397,"lo":-95.823913,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv14hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv14lb/playlist.m3u8"},{"i":"59608788","n":"CB - I-29/80 @ MM 1.4 (W of S 24th St - S)","la":41.231837,"lo":-95.884798,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv51hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv51lb/playlist.m3u8"},{"i":"59608801","n":"CB - I-29 @ MM 61.9 (I-680 Interchange)","la":41.353805,"lo":-95.900559,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv36hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv36lb/playlist.m3u8"},{"i":"59608803","n":"CB - I-29 @ MM 47.9 (US 275)","la":41.219844,"lo":-95.832641,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv53hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv53lb/playlist.m3u8"},{"i":"59608805","n":"CB - I-80 @ MM 7.3 (Hubbard Rd)","la":41.267545,"lo":-95.795331,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv11hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv11lb/playlist.m3u8"},{"i":"59608814","n":"CB - I-29 @ MM 59.7 (S of Hamilton Ln)","la":41.322219,"lo":-95.882857,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv34hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv34lb/playlist.m3u8"},{"i":"59608820","n":"CB - US 275 @ MM 58.6 (E of Missouri River Bridge)","la":41.207433,"lo":-95.912104,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv25hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv25lb/playlist.m3u8"},{"i":"59608829","n":"CB - I-29 @ MM 73.2","la":41.513075,"lo":-95.91167,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv43hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv43lb/playlist.m3u8"},{"i":"59608841","n":"CB - I-29/80 @ MM 1.2 (W of S 24th St - N)","la":41.232997,"lo":-95.887123,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv46hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv46lb/playlist.m3u8"},{"i":"59608850","n":"CB - I-29 @ MM 53.2 (9th Ave DMS)","la":41.252305,"lo":-95.907321,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv69hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv69lb/playlist.m3u8"},{"i":"59608854","n":"CB - I-29 @ MM 45.6 (Basswood Rd)","la":41.18974,"lo":-95.822647,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv15hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv15lb/playlist.m3u8"},{"i":"59608856","n":"CB - I-29 @ MM 48.4 (Exit 48A)","la":41.227206,"lo":-95.836742,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv63hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv63lb/playlist.m3u8"},{"i":"59608915","n":"CB - I-80 @ MM 4.3 (Harry Langdon Blvd)","la":41.233289,"lo":-95.829631,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv64hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv64lb/playlist.m3u8"},{"i":"59608933","n":"CB - I-29/80 WB @ MM 3.5 (East Interchange)","la":41.23324,"lo":-95.844137,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv56hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv56lb/playlist.m3u8"},{"i":"59608953","n":"CB - I-80 @ MM 29.1 (Minden Interchange)","la":41.496198,"lo":-95.546615,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv39hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv39lb/playlist.m3u8"},{"i":"59608948","n":"CB - I-480 @ MM 0.1 (Missouri River Bridge)","la":41.259584,"lo":-95.91985,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv20hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv20lb/playlist.m3u8"},{"i":"59608949","n":"CB - I-80 @ MM 8.3 (US 6)","la":41.27969,"lo":-95.785203,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv12hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv12lb/playlist.m3u8"},{"i":"59608972","n":"CB - I-29/80 @ MM 3.1 (S Expressway St)","la":41.232508,"lo":-95.85183,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv55hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv55lb/playlist.m3u8"},{"i":"59608974","n":"CB - I-29 @ MM 48.6 (I-29/80 Interchange)","la":41.228669,"lo":-95.838814,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv66hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv66lb/playlist.m3u8"},{"i":"59609001","n":"CB - I-80 @ MM 1 (West I-29 Interchange - E)","la":41.232258,"lo":-95.891698,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv50hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv50lb/playlist.m3u8"},{"i":"59608988","n":"CB - I-80 @ MM 27.3 (I-880 Interchange)","la":41.497344,"lo":-95.582923,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv38hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv38lb/playlist.m3u8"},{"i":"59609004","n":"CB - I-29 @ MM 48.2 (N of US 275)","la":41.224,"lo":-95.836,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv67hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv67lb/playlist.m3u8"},{"i":"59609036","n":"CB - US 275 @ MM 56.6 (24th St)","la":41.218858,"lo":-95.879552,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv26hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv26lb/playlist.m3u8"},{"i":"59609063","n":"CB - US 275 @ MM 55 (South Expressway)","la":41.219823,"lo":-95.849662,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv28hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv28lb/playlist.m3u8"},{"i":"59609085","n":"CB - I-480 @ MM 0.4 (W of 40th St)","la":41.261467,"lo":-95.913824,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv72hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv72lb/playlist.m3u8"},{"i":"59609083","n":"CB - I-29 @ MM 52.1 (I-80 EB Ramp)","la":41.237071,"lo":-95.900103,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv45hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv45lb/playlist.m3u8"},{"i":"59609109","n":"CB - I-29 @ MM 53.4","la":41.254532,"lo":-95.907134,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv18hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv18lb/playlist.m3u8"},{"i":"59609104","n":"CB - I-29 @ MM 52.7 (Nebraska Ave DMS)","la":41.244481,"lo":-95.905906,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv16hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv16lb/playlist.m3u8"},{"i":"59609120","n":"CB - I-29 @ MM 53.9 (I-480E Flyover)","la":41.262589,"lo":-95.909663,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv71hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv71lb/playlist.m3u8"},{"i":"59609127","n":"CB - I-29/80 @ MM 49.2 (E of S Expressway)","la":41.232,"lo":-95.847,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv65hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv65lb/playlist.m3u8"},{"i":"59609131","n":"CB - I-29 @ MM 48.9 (I-80W Interchange)","la":41.232871,"lo":-95.842369,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv62hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv62lb/playlist.m3u8"},{"i":"59609139","n":"CB - I-29 @ MM 52.9 (RR Crossing)","la":41.248051,"lo":-95.906376,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv68hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv68lb/playlist.m3u8"},{"i":"59609143","n":"CB - I-29 @ MM 52.5 (Nebraska Ave)","la":41.242126,"lo":-95.904113,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv17hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv17lb/playlist.m3u8"},{"i":"59609153","n":"CB - I-29/80 @ MM 2.5 (E of Indian Creek)","la":41.232599,"lo":-95.862928,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv48hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv48lb/playlist.m3u8"},{"i":"59609155","n":"CB - I-80 @ MM 5 (Madison Ave)","la":41.241955,"lo":-95.824083,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv08hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv08lb/playlist.m3u8"},{"i":"59609169","n":"CB - I-29 @ MM 48.8 (E I-29 Interchange)","la":41.2312,"lo":-95.839759,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv57hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv57lb/playlist.m3u8"},{"i":"59609190","n":"CB - I-29 @ MM 47.8 (S of US 275)","la":41.219712,"lo":-95.830504,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv54hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv54lb/playlist.m3u8"},{"i":"59609203","n":"CB - I-80 @ MM 0.1 (Missouri River Bridge)","la":41.231067,"lo":-95.908499,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv01hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv01lb/playlist.m3u8"},{"i":"59609212","n":"CB - I-29/80 @ MM 2.3 (W of Indian Creek)","la":41.231929,"lo":-95.866702,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv61hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv61lb/playlist.m3u8"},{"i":"59609216","n":"CB - Nebraska Ave @ 35th St (70)","la":41.244042,"lo":-95.901186,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv70hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv70lb/playlist.m3u8"},{"i":"59609242","n":"CB - I-29 @ MM 71.7 (I-880 Interchange)","la":41.494224,"lo":-95.901182,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv37hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv37lb/playlist.m3u8"},{"i":"59609247","n":"CB - I-29/80 @ MM 50.8 (S 24th St)","la":41.231797,"lo":-95.878673,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv03hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv03lb/playlist.m3u8"},{"i":"59609248","n":"CB - I-29/80 @ MM 2.7 (S Expressway St WB Ent Ramp)","la":41.232596,"lo":-95.85907,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv59hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv59lb/playlist.m3u8"},{"i":"59609315","n":"CB - I-29/80 @ MM 49.6 (S Expressway)","la":41.232012,"lo":-95.855708,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv05hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv05lb/playlist.m3u8"},{"i":"59609353","n":"CB - I-80 @ MM 6.6 (McPherson Ave)","la":41.260571,"lo":-95.80385,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv10hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv10lb/playlist.m3u8"},{"i":"59609381","n":"CB - I-80 @ MM 0.7 (West I-29 Interchange)","la":41.232818,"lo":-95.897184,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv02hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv02lb/playlist.m3u8"},{"i":"59609378","n":"CB - I-29 @ MM 52.1 (West I-80 Interchange - N)","la":41.238052,"lo":-95.900372,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv52hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv52lb/playlist.m3u8"},{"i":"59609379","n":"CB - I-29/80 @ MM 1.7 (E of S 24th St - N)","la":41.232803,"lo":-95.878188,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv47hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv47lb/playlist.m3u8"},{"i":"59609420","n":"CB - I-29 @ MM 61.2 (S of I-680 Interchange)","la":41.344128,"lo":-95.890903,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv35hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv35lb/playlist.m3u8"},{"i":"59609435","n":"CB - I-29 @ MM 55.1","la":41.273961,"lo":-95.893968,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv29hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv29lb/playlist.m3u8"},{"i":"59609460","n":"CB - I-29 @ MM 55","la":41.273479,"lo":-95.896561,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv21hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv21lb/playlist.m3u8"},{"i":"59609479","n":"CB - I-80 @ MM 5.5","la":41.246525,"lo":-95.814801,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv09hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv09lb/playlist.m3u8"},{"i":"59609508","n":"CB - I-29/80 @ MM 2.1 (E of S 24th St - S)","la":41.231922,"lo":-95.870346,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv60hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv60lb/playlist.m3u8"},{"i":"59609510","n":"CB - I-29 @ MM 54.1","la":41.265448,"lo":-95.908552,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv19hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv19lb/playlist.m3u8"},{"i":"59609529","n":"CB - I-29 @ MM 53.6","la":41.258373,"lo":-95.906978,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv73hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv73lb/playlist.m3u8"},{"i":"59609532","n":"CB - I-80 @ MM 0.5 (West I-29 Interchange - W)","la":41.231854,"lo":-95.900496,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv49hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv49lb/playlist.m3u8"},{"i":"59609538","n":"CB - I-80 @ MM 4.5 (E of Harry Langdon Blvd)","la":41.234779,"lo":-95.826466,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv07hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv07lb/playlist.m3u8"},{"i":"59609548","n":"CB - I-29 @ MM 42.9 (IA 370)","la":41.149378,"lo":-95.822582,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv13hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv13lb/playlist.m3u8"},{"i":"59609551","n":"CB - I-29 @ MM 57 (IA 192)","la":41.286278,"lo":-95.86627,"u":"https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv23hd.jpeg","s":"IADOT","v":"https://video2.iowadot.gov:8888/councilbluffs/cbtv23lb/playlist.m3u8"},{"i":"wowt-councilbluffs","n":"Council Bluffs Riverfront","la":41.2589,"lo":-95.8477,"u":"https://webpubcontent.gray.tv/wowt/cameras/councilbluffs.jpg","s":"WOWT"},{"i":"wowt-ubt","n":"WOWT - UBT Tower (Douglas St)","la":41.259,"lo":-95.9333,"u":"https://webpubcontent.gray.tv/wowt/cameras/ubt.jpg","s":"WOWT"},{"i":"wowt-firstnatne","n":"WOWT - First National North (DT Omaha)","la":41.2588,"lo":-95.9302,"u":"https://webpubcontent.gray.tv/wowt/cameras/firstnatne.jpg","s":"WOWT"},{"i":"wowt-firstnatsw","n":"WOWT - First National South (NE Omaha)","la":41.256,"lo":-95.9295,"u":"https://webpubcontent.gray.tv/wowt/cameras/firstnatsw.jpg","s":"WOWT"},{"i":"wowt-amnatbank","n":"WOWT - American National Bank (Farnam)","la":41.2566,"lo":-95.9367,"u":"https://webpubcontent.gray.tv/wowt/cameras/amnatbank.jpg","s":"WOWT"},{"i":"wowt-blackstoneplaza","n":"WOWT - Blackstone Plaza","la":41.2627,"lo":-95.9712,"u":"https://webpubcontent.gray.tv/wowt/cameras/blackstoneplaza.jpg","s":"WOWT"},{"i":"wowt-childrens","n":"WOWT - Children's Nebraska (Dodge St)","la":41.2625,"lo":-96.0414,"u":"https://webpubcontent.gray.tv/wowt/cameras/childrens.jpg","s":"WOWT"}];
+
+let camLayer = null, camLayerOn = true;
+let camStripRendered = 0, camRotateIdx = 0, camTiles = [];
+const CAM_TILES_VISIBLE = 16;
+const CAM_SRC_COLOR = { NDOT: '#4a8fa0', IADOT: '#22D3EE', WOWT: '#F59E0B' };
+
+function camSourceColor(src) { return CAM_SRC_COLOR[src] || '#6eb3c4'; }
+
+function camJam(url) { return url + (url.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now(); }
+
+function openCam(cam) {
+    try {
+        const overlay = safeGet('modal-overlay');
+        const title = safeGet('modal-title');
+        const body = safeGet('modal-body');
+        if (!overlay || !title || !body) return;
+        title.textContent = '◢ LIVE CAMERA: ' + cam.n;
+        let media = '<img id="cam-enlarge" src="' + camJam(cam.u) + '" alt="' + escapeHtml(cam.n) + '">';
+        if (cam.v) {
+            media = '<video id="cam-live" autoplay muted controls playsinline></video>';
+        }
+        body.innerHTML = '<div class="cam-modal-body">' + media +
+            '<div class="cam-modal-meta">' +
+            '<span style="color: ' + camSourceColor(cam.s) + ';">SOURCE: ' + cam.s + '</span>' +
+            '<span>LAT: ' + cam.la.toFixed(4) + '</span>' +
+            '<span>LNG: ' + cam.lo.toFixed(4) + '</span>' +
+            '<span id="cam-fresh">SNAPSHOT REFRESHING...</span>' +
+            '</div></div>';
+        overlay.classList.add('active');
+        if (cam.v) {
+            const vid = safeGet('cam-live');
+            const m3u8 = cam.v;
+            if (window.Hls && Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(m3u8);
+                hls.attachMedia(vid);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => vid.play().catch(() => {}));
+            } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+                vid.src = m3u8;
+                vid.play().catch(() => {});
+            } else if (!window.Hls) {
+                // no HLS support and no hls.js yet: try to load it, else fall back to snapshot
+                const scr = document.createElement('script');
+                scr.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js";
+                scr.onload = () => openCam(cam);
+                scr.onerror = () => {
+                    const enl = safeGet('cam-enlarge');
+                    if (enl) enl.src = camJam(cam.u);
+                    vid.parentNode.replaceChild(enl, vid);
+                };
+                document.head.appendChild(scr);
+                return;
+            }
+        } else {
+            const enl = safeGet('cam-enlarge');
+            if (enl) {
+                setInterval(() => { enl.src = camJam(cam.u); }, 15000);
+            }
+        }
+    } catch (err) {
+        console.error('openCam error:', err);
+    }
+}
+
+function camTile(cam) {
+    const div = document.createElement('div');
+    div.className = 'cam-tile';
+    div.title = cam.n;
+    const img = document.createElement('img');
+    img.loading = 'eager';
+    img.alt = cam.n;
+    img.src = camJam(cam.u);
+    img.addEventListener('load', () => { div.classList.remove('offline'); });
+    img.addEventListener('error', () => { div.classList.add('offline'); });
+    div.appendChild(img);
+    const lbl = document.createElement('div');
+    lbl.className = 'cam-label';
+    lbl.textContent = cam.n;
+    div.appendChild(lbl);
+    const src = document.createElement('div');
+    src.className = 'cam-src';
+    src.style.background = camSourceColor(cam.s);
+    src.textContent = cam.s;
+    div.appendChild(src);
+    div.addEventListener('click', () => openCam(cam));
+    return div;
+}
+
+function renderCamStrip() {
+    const strip = safeGet('cam-strip');
+    const counter = safeGet('cam-count');
+    if (!strip) return;
+    counter.textContent = KIOSK_CAMS.length;
+    strip.innerHTML = '';
+    camTiles = [];
+    camStripRendered = Math.min(CAM_TILES_VISIBLE, KIOSK_CAMS.length);
+    for (let i = 0; i < camStripRendered; i++) {
+        const tile = camTile(KIOSK_CAMS[i]);
+        strip.appendChild(tile);
+        camTiles.push(tile);
+    }
+}
+
+function refreshCamStrip() {
+    for (let i = 0; i < camTiles.length; i++) {
+        const cam = KIOSK_CAMS[(camRotateIdx + i) % KIOSK_CAMS.length];
+        const img = camTiles[i].querySelector('img');
+        if (img) img.src = camJam(cam.u);
+    }
+}
+
+function rotateCamStrip() {
+    if (!KIOSK_CAMS.length || !camTiles.length) return;
+    camRotateIdx = (camRotateIdx + Math.round(CAM_TILES_VISIBLE / 2)) % KIOSK_CAMS.length;
+    for (let i = 0; i < camTiles.length; i++) {
+        const cam = KIOSK_CAMS[(camRotateIdx + i) % KIOSK_CAMS.length];
+        const tile = camTiles[i];
+        tile.querySelector('img').src = camJam(cam.u);
+        tile.querySelector('.cam-label').textContent = cam.n;
+        tile.querySelector('.cam-src').style.background = camSourceColor(cam.s);
+        tile.title = cam.n;
+        tile.onclick = () => openCam(cam);
+    }
+}
+
+function makeCamMarker(cam) {
+    return L.circleMarker([cam.la, cam.lo], {
+        radius: 3,
+        color: camSourceColor(cam.s),
+        fillColor: camSourceColor(cam.s),
+        fillOpacity: 0.9,
+        weight: 1
+    });
+}
+
+function renderCamMarkers() {
+    try {
+        if (!map || camLayer) return;
+        camLayer = L.layerGroup().addTo(map);
+        KIOSK_CAMS.forEach(cam => {
+            const m = makeCamMarker(cam);
+            m.bindTooltip(cam.n);
+            m.on('click', () => openCam(cam));
+            camLayer.addLayer(m);
+        });
+        addLog('info', 'CAMERA LAYER: ' + KIOSK_CAMS.length + ' LIVE CAMS');
+    } catch (err) {
+        console.error('renderCamMarkers error:', err);
+    }
+}
+
+window.toggleCamLayer = function () {
+    try {
+        if (!camLayer) { renderCamMarkers(); return; }
+        camLayerOn = !camLayerOn;
+        if (camLayerOn) { map.addLayer(camLayer); } else { map.removeLayer(camLayer); }
+        addLog(camLayerOn ? 'info' : 'warn', camLayerOn ? 'CAMERA LAYER ON' : 'CAMERA LAYER OFF');
+    } catch (err) {
+        console.error('toggleCamLayer error:', err);
+    }
+};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'c' || e.key === 'C') window.toggleCamLayer();
+});
+
+function initCams() {
+    try {
+        renderCamStrip();
+        setTimeout(renderCamMarkers, 500);
+        setInterval(rotateCamStrip, 20000);
+        setInterval(refreshCamStrip, 12000);
+        addLog('info', 'CAMERAS ARMED: ' + KIOSK_CAMS.length + ' FEEDS');
+    } catch (err) {
+        console.error('initCams error:', err);
+    }
+}
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+}
+
+setTimeout(initCams, 1500);
+
+        console.log('R510 Dashboard ready');
+    </script>
+</body>
+</html>

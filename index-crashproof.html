@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER - NODE 01</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0f1419;
+            color: #a8b2bc;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            font-size: 10px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto auto;
+            height: 100vh;
+            padding: 3px;
+            gap: 3px;
+        }
+
+        .header {
+            background: #1a1f26;
+            color: #a8b2bc;
+            padding: 5px 12px;
+            border: 1px solid #4a8fa0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+
+        .header-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .header-status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6ea87d;
+            box-shadow: 0 0 6px #6ea87d;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.offline {
+            background: #c96c6c;
+            box-shadow: 0 0 6px #c96c6c;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr 340px;
+            grid-template-rows: 1fr 180px;
+            gap: 3px;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #4a8fa0;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #4a8fa0;
+            border-radius: 2px;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+        }
+
+        .leaflet-container {
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        .map-tiles-dark {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #1a1f26;
+            color: #a8b2bc;
+            border: 1px solid #4a8fa0;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+        }
+
+        /* CRIME DETAILS */
+        .crime-detail-card {
+            background: #1f2429;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .crime-detail-card.focused {
+            border-color: #6eb3c4;
+            box-shadow: 0 0 10px rgba(110, 179, 196, 0.3);
+        }
+
+        .crime-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .crime-detail-type {
+            font-weight: bold;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .crime-detail-urgency {
+            font-size: 7px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+            font-weight: bold;
+        }
+
+        .crime-detail-urgency.high { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+        .crime-detail-urgency.medium { background: rgba(245, 158, 11, 0.2); color: #F59E0B; }
+        .crime-detail-urgency.low { background: rgba(59, 130, 246, 0.2); color: #3B82F6; }
+
+        .crime-detail-info {
+            font-size: 8px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .crime-detail-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 3px;
+        }
+
+        .crime-detail-label {
+            color: #6eb3c4;
+            min-width: 50px;
+        }
+
+        /* FLIGHTS */
+        .flight-row {
+            font-size: 8px;
+            padding: 3px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .flight-callsign {
+            color: #10b981;
+            font-weight: bold;
+            font-size: 9px;
+        }
+
+        .flight-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+            display: inline-block;
+        }
+
+        .squawk-emergency {
+            color: #EF4444 !important;
+            animation: pulse-emergency 1s infinite;
+        }
+
+        .squawk-vfr {
+            color: #3B82F6 !important;
+        }
+
+        @keyframes pulse-emergency {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* CRIME */
+        .crime-row {
+            font-size: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .crime-row:hover {
+            background: #1a1a2e;
+        }
+
+        .crime-row.focused {
+            background: rgba(74, 143, 160, 0.2);
+        }
+
+        .crime-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .crime-assault { background: #c96c6c; box-shadow: 0 0 6px #c96c6c; }
+        .crime-robbery { background: #d4a574; box-shadow: 0 0 6px #d4a574; }
+        .crime-burglary { background: #9884c4; box-shadow: 0 0 6px #9884c4; }
+        .crime-theft { background: #6b9bc4; box-shadow: 0 0 6px #6b9bc4; }
+        .crime-vandalism { background: #6eb3c4; box-shadow: 0 0 6px #6eb3c4; }
+
+        .crime-pulse {
+            animation: crime-pulse 2s infinite;
+        }
+
+        @keyframes crime-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* THREAT MATRIX */
+        .threat-legend {
+            padding: 10px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .threat-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 9px;
+        }
+
+        /* TELEMETRY */
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            padding: 2px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+
+        .telemetry-label {
+            color: #6b7280;
+        }
+
+        .telemetry-value {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        /* LOGS */
+        .log-line {
+            font-size: 7px;
+            padding: 1px 0;
+            color: #6b7280;
+        }
+
+        .log-timestamp {
+            color: #6eb3c4;
+            margin-right: 4px;
+        }
+
+        .log-info { color: #6ea87d; }
+        .log-warn { color: #d4a574; }
+        .log-error { color: #c96c6c; }
+
+        /* POLICE SCANNER - FULL HEIGHT RIGHT PANEL */
+        .scanner-controls {
+            background: #1f2429;
+            padding: 8px;
+            border: 1px solid #4a8fa0;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+
+        .scanner-button {
+            background: #6eb3c4;
+            border: none;
+            color: #000;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-family: 'Courier New';
+            font-size: 9px;
+            font-weight: bold;
+            border-radius: 2px;
+        }
+
+        .scanner-transcript-container {
+            flex: 1;
+            background: #000;
+            border: 1px solid #4a8fa0;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 0;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .scanner-transcript-container::-webkit-scrollbar-thumb {
+            background: #4a8fa0;
+            border-radius: 3px;
+        }
+
+        .transcript-entry {
+            padding: 8px;
+            background: rgba(110, 179, 196, 0.1);
+            margin-bottom: 4px;
+            border-left: 2px solid #6eb3c4;
+            flex-shrink: 0;
+        }
+
+        .transcript-time {
+            color: #6eb3c4;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .transcript-unit {
+            color: #d4a574;
+            font-size: 14px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .transcript-msg {
+            color: #a8b2bc;
+            font-size: 16px;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        /* MENU BAR */
+        .menu-bar {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 4px 12px;
+            font-size: 9px;
+            display: flex;
+            gap: 20px;
+            color: #7a8893;
+        }
+
+        .menu-item {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .menu-item:hover {
+            color: #6eb3c4;
+        }
+
+        .menu-key {
+            color: #6eb3c4;
+            font-weight: bold;
+            margin-right: 2px;
+        }
+
+        /* MODAL OVERLAY */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1a1f26;
+            border: 2px solid #6eb3c4;
+            padding: 20px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 0 30px rgba(110, 179, 196, 0.5);
+        }
+
+        .modal-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #4a8fa0;
+        }
+
+        .modal-close {
+            color: #7a8893;
+            font-size: 10px;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #4a8fa0;
+            text-align: center;
+        }
+
+        .footer {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 4px 12px;
+            font-size: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            color: #7a8893;
+        }
+
+        .footer-top {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .marquee-container {
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+            padding: 4px 8px;
+            overflow: hidden;
+            height: 20px;
+            position: relative;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 60s linear infinite;
+            padding-left: 100%;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .marquee-item {
+            display: inline-block;
+            margin-right: 40px;
+            color: #6ea87d;
+            font-size: 8px;
+        }
+
+        .marquee-item.traffic {
+            color: #d4a574;
+        }
+
+        .marquee-item.crime {
+            color: #c96c6c;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">R510 COMMAND CENTER /// ORBITAL NODE-01</div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="adsb-status"></div>
+                    <span>ADS-B</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot offline" id="shaggoth-status"></div>
+                    <span>SHAGGOTH-A1</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="crime-status"></div>
+                    <span>CRIME</span>
+                </div>
+                <span id="timestamp">LOADING...</span>
+            </div>
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div style="display: flex; flex-direction: column; gap: 3px; grid-row: 1 / 3;">
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ THREAT MATRIX</div>
+                    <div class="panel-content">
+                        <div class="threat-legend">
+                            <div style="margin-bottom: 10px; font-size: 8px; color: #6b7280; text-align: center;">SEVERITY CLASSIFICATION</div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-assault"></div>
+                                <span style="color: #EF4444; font-weight: bold;">ASSAULT / VIOLENCE</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-robbery"></div>
+                                <span style="color: #F59E0B; font-weight: bold;">ROBBERY / ARMED</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-burglary"></div>
+                                <span style="color: #8B5CF6; font-weight: bold;">BURGLARY</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-theft"></div>
+                                <span style="color: #3B82F6; font-weight: bold;">THEFT / LARCENY</span>
+                            </div>
+                            <div class="threat-legend-item">
+                                <div class="crime-marker crime-vandalism"></div>
+                                <span style="color: #22D3EE; font-weight: bold;">VANDALISM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ FLIGHTS (<span id="flight-count">0</span>)</div>
+                    <div class="panel-content" id="flights"></div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">◢ CRIME SCANNER (<span id="crime-count">0</span>)</div>
+                    <div class="panel-content" id="crime"></div>
+                </div>
+            </div>
+
+            <!-- CENTER MAP -->
+            <div class="panel" style="grid-row: 1 / 2;">
+                <div class="panel-title">◢ AIRSPACE - OMAHA SECTOR</div>
+                <div id="map"></div>
+            </div>
+
+            <!-- ACTIVE INCIDENT (CENTER BOTTOM) -->
+            <div class="panel" style="grid-row: 2 / 3;">
+                <div class="panel-title">◢ ACTIVE INCIDENT: <span id="focused-crime-name">INITIALIZING...</span></div>
+                <div class="panel-content" id="crime-details"></div>
+            </div>
+
+            <!-- RIGHT COLUMN - POLICE SCANNER FULL HEIGHT -->
+            <div class="panel" style="grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0;">
+                <div class="panel-title">◢ OMAHA POLICE SCANNER - <span id="scanner-status">OFFLINE</span></div>
+                <div class="scanner-controls">
+                    <button id="scanner-play" onclick="window.toggleScanner()" class="scanner-button">
+                        ▶ PLAY
+                    </button>
+                    <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
+                        <div id="scanner-pulse" style="width: 8px; height: 8px; background: #6eb3c4; border-radius: 50%; box-shadow: 0 0 6px #6eb3c4; animation: pulse-dot 2s infinite;"></div>
+                        <span style="color: #6eb3c4; font-size: 8px; font-weight: bold;">BROADCASTIFY</span>
+                    </div>
+                    <div style="color: #7a8893; font-size: 7px;">OPD MAIN</div>
+                </div>
+
+                <!-- Transcript Container - Newest at BOTTOM -->
+                <div class="scanner-transcript-container" id="scanner-transcript">
+                    <div style="color: #6b7280; padding: 20px; text-align: center; font-size: 12px;">
+                        Press PLAY to start scanner...
+                    </div>
+                </div>
+
+                <!-- Audio element (hidden) -->
+                <audio id="scanner-audio" style="display: none;" preload="none"></audio>
+            </div>
+        </div>
+
+        <!-- MENU BAR -->
+        <div class="menu-bar">
+            <div class="menu-item" onclick="window.showModal('telemetry')">
+                <span class="menu-key">[T]</span>TELEMETRY
+            </div>
+            <div class="menu-item" onclick="window.showModal('logs')">
+                <span class="menu-key">[L]</span>SYSTEM LOGS
+            </div>
+            <div class="menu-item" onclick="window.showModal('journal')">
+                <span class="menu-key">[J]</span>JOURNAL
+            </div>
+            <span style="margin-left: auto; color: #4a8fa0;">PRESS [ESC] TO CLOSE PANELS</span>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div class="footer-top">
+                <span>CLASSIFIED /// ORBITAL COMMAND</span>
+                <span>NODE: R510-ALPHA /// OMAHA SURVEILLANCE</span>
+                <span id="uptime">UPTIME: 00:00:00</span>
+            </div>
+            <div class="marquee-container">
+                <div class="marquee-content" id="news-marquee">
+                    <span class="marquee-item">LOADING NEWS FEED...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OVERLAY -->
+    <div class="modal-overlay" id="modal-overlay" onclick="window.closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title" id="modal-title">PANEL</div>
+            <div id="modal-body"></div>
+            <div class="modal-close">PRESS [ESC] OR CLICK OUTSIDE TO CLOSE</div>
+        </div>
+    </div>
+
+    <script>
+        // GLOBAL STATE
+        const CONFIG = {
+            DUMP1090_URL: 'http://192.168.0.169:8080/data/aircraft.json',
+            MAP_CENTER: [41.2565, -95.9345],
+            MAP_ZOOM: 11,
+            UPDATE_INTERVAL: 2000,
+            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460'
+        };
+
+        let map, aircraftMarkers = {}, crimeMarkers = [];
+        let aircraft = [], crimeData = [];
+        let currentFocusedCrimeIndex = 0;
+        let scannerPlaying = false, scannerAudio = null;
+        let transcriptInterval = null;  // Track interval to prevent duplicates
+
+        // Safe DOM getter
+        function safeGet(id) {
+            try {
+                return document.getElementById(id);
+            } catch (err) {
+                console.error(`Error getting element '${id}':`, err);
+                return null;
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 't' || e.key === 'T') window.showModal('telemetry');
+            if (e.key === 'l' || e.key === 'L') window.showModal('logs');
+            if (e.key === 'j' || e.key === 'J') window.showModal('journal');
+            if (e.key === 'Escape') window.closeModal();
+        });
+
+        window.showModal = function(type) {
+            const overlay = safeGet('modal-overlay');
+            const title = safeGet('modal-title');
+            const body = safeGet('modal-body');
+            if (!overlay || !title || !body) return;
+
+            overlay.classList.add('active');
+
+            if (type === 'telemetry') {
+                title.textContent = '◢ SYSTEM TELEMETRY';
+                body.innerHTML = '<div id="modal-telemetry"></div>';
+                updateTelemetry(true);
+            } else if (type === 'logs') {
+                title.textContent = '◢ SYSTEM LOGS';
+                body.innerHTML = '<div id="modal-logs"></div>';
+                updateLogsModal();
+            } else if (type === 'journal') {
+                title.textContent = '◢ OPERATIONAL JOURNAL';
+                body.innerHTML = `
+                    <div style="color: #a8b2bc; font-size: 10px; line-height: 1.6;">
+                        <p style="margin-bottom: 10px;">R510 COMMAND CENTER - OPERATIONAL LOG</p>
+                        <p style="color: #6b7280;">Mission Status: ACTIVE</p>
+                        <p style="color: #6b7280;">Systems: ALL NOMINAL</p>
+                        <p style="color: #6b7280;">Next Review: 00:00 UTC</p>
+                    </div>
+                `;
+            }
+        };
+
+        window.closeModal = function() {
+            const overlay = safeGet('modal-overlay');
+            if (overlay) overlay.classList.remove('active');
+        };
+
+        function updateLogsModal() {
+            const container = document.getElementById('modal-logs');
+            if (!container) return;
+            container.innerHTML = logBuffer.map(log => `
+                <div class="log-line log-${log.level}">
+                    <span class="log-timestamp">[${log.timestamp}]</span>
+                    ${log.message}
+                </div>
+            `).join('');
+        }
+
+        function initMap() {
+            try {
+                map = L.map('map', {
+                    center: CONFIG.MAP_CENTER,
+                    zoom: CONFIG.MAP_ZOOM,
+                    zoomControl: true
+                });
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OSM',
+                    maxZoom: 19,
+                    className: 'map-tiles-dark'
+                }).addTo(map);
+
+                addLog('info', 'OPENSTREETMAP INITIALIZED');
+                fetchAircraftData();
+
+                setTimeout(() => {
+                    try {
+                        generateCrimeData();
+                        if (crimeData.length > 0) focusOnCrime(0);
+                    } catch (err) {
+                        console.error('Crime setup error:', err);
+                        addLog('error', 'CRIME INIT ERROR');
+                    }
+                }, 1000);
+            } catch (err) {
+                console.error('Map init error:', err);
+                addLog('error', 'MAP INIT FAILED');
+            }
+        }
+
+        function getSquawkColor(squawk) {
+            if (!squawk) return '#6ea87d';
+            if (['7500', '7600', '7700'].includes(squawk)) return '#c96c6c';
+            if (squawk === '1200') return '#6b9bc4';
+            return '#6ea87d';
+        }
+
+        function getSquawkClass(squawk) {
+            if (['7500', '7600', '7700'].includes(squawk)) return 'squawk-emergency';
+            if (squawk === '1200') return 'squawk-vfr';
+            return '';
+        }
+
+        function isEmergencySquawk(squawk) {
+            return squawk && ['7500', '7600', '7700'].includes(squawk);
+        }
+
+        function createAircraftIcon(color, rotation = 0, isEmergency = false) {
+            const pulse = isEmergency ? '<circle cx="8" cy="8" r="8" fill="#EF4444" opacity="0.3"><animate attributeName="r" from="4" to="12" dur="1.5s" repeatCount="indefinite" /><animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite" /></circle>' : '';
+            return L.divIcon({
+                html: `<svg width="24" height="24" viewBox="0 0 16 16">${pulse}<g transform="rotate(${rotation} 8 8)"><path d="M 8 2 L 10 12 L 8 11 L 6 12 Z" fill="${color}" stroke="#000" stroke-width="0.5"/></g></svg>`,
+                className: '',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        async function fetchAircraftData() {
+            try {
+                const response = await fetch(CONFIG.DUMP1090_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                aircraft = (data.aircraft || []).map(ac => ({
+                    ...ac,
+                    color: getSquawkColor(ac.squawk),
+                    squawkClass: getSquawkClass(ac.squawk),
+                    isEmergency: isEmergencySquawk(ac.squawk)
+                }));
+                updateAircraftMarkers();
+                updateFlightList();
+                const el = safeGet('adsb-status');
+                if (el) el.className = 'status-dot';
+            } catch (error) {
+                const el = safeGet('adsb-status');
+                if (el) el.className = 'status-dot offline';
+            }
+        }
+
+        function updateAircraftMarkers() {
+            try {
+                const currentHexes = new Set();
+                aircraft.forEach(ac => {
+                    try {
+                        if (!ac.lat || !ac.lon) return;
+                        currentHexes.add(ac.hex);
+                        if (aircraftMarkers[ac.hex]) {
+                            aircraftMarkers[ac.hex].setLatLng([ac.lat, ac.lon]);
+                            aircraftMarkers[ac.hex].setIcon(createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency));
+                        } else {
+                            const marker = L.marker([ac.lat, ac.lon], {
+                                icon: createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency)
+                            }).addTo(map);
+                            const squawkInfo = ac.squawk ? `<br>Squawk: <strong style="color: ${ac.color};">${ac.squawk}</strong>` : '';
+                            marker.bindPopup(`<div style="font-family: monospace; font-size: 10px;"><strong style="color: ${ac.color};">${(ac.flight || ac.hex).trim()}</strong>${squawkInfo}<br>Alt: ${ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A'}<br>Speed: ${ac.gs ? Math.round(ac.gs) + 'kts' : 'N/A'}</div>`);
+                            aircraftMarkers[ac.hex] = marker;
+                            if (ac.isEmergency) addLog('error', `EMERGENCY SQUAWK ${ac.squawk}: ${(ac.flight || ac.hex).trim()}`);
+                        }
+                    } catch (err) {
+                        console.error(`Marker error ${ac.hex}:`, err);
+                    }
+                });
+                Object.keys(aircraftMarkers).forEach(hex => {
+                    if (!currentHexes.has(hex)) {
+                        try {
+                            map.removeLayer(aircraftMarkers[hex]);
+                            delete aircraftMarkers[hex];
+                        } catch (err) {}
+                    }
+                });
+            } catch (err) {
+                console.error('updateAircraftMarkers error:', err);
+            }
+        }
+
+        function updateFlightList() {
+            try {
+                const container = safeGet('flights');
+                const countEl = safeGet('flight-count');
+                if (countEl) countEl.textContent = aircraft.length;
+                if (!container) return;
+                if (aircraft.length === 0) {
+                    container.innerHTML = '<div style="color: #6b7280; padding: 10px; text-align: center;">NO AIRCRAFT</div>';
+                    return;
+                }
+                container.innerHTML = aircraft.slice(0, 20).map(ac => {
+                    const callsign = (ac.flight || ac.hex).trim();
+                    const alt = ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A';
+                    return `<div class="flight-row"><div><span class="flight-marker" style="background: ${ac.color};"></span><span class="flight-callsign ${ac.squawkClass}">${callsign}</span></div><div style="color: #6b7280; font-size: 7px;">${alt}</div></div>`;
+                }).join('');
+            } catch (err) {
+                console.error('updateFlightList error:', err);
+            }
+        }
+
+        const CRIME_TYPES = [
+            { type: 'ASSAULT', class: 'crime-assault', color: '#c96c6c', urgency: 10, urgencyLabel: 'HIGH' },
+            { type: 'ROBBERY', class: 'crime-robbery', color: '#d4a574', urgency: 9, urgencyLabel: 'HIGH' },
+            { type: 'BURGLARY', class: 'crime-burglary', color: '#9884c4', urgency: 7, urgencyLabel: 'MEDIUM' },
+            { type: 'THEFT', class: 'crime-theft', color: '#6b9bc4', urgency: 5, urgencyLabel: 'LOW' },
+            { type: 'VANDALISM', class: 'crime-vandalism', color: '#6eb3c4', urgency: 3, urgencyLabel: 'LOW' }
+        ];
+
+        const STREET_NAMES = ['DODGE', 'PACIFIC', 'FARNAM', 'CAPITOL', 'LEAVENWORTH', 'CUMING', 'CALIFORNIA', 'BURT'];
+
+        function generateCrimeData() {
+            try {
+                const previousHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+                crimeData = Array.from({ length: 12 }, () => {
+                    const crimeType = CRIME_TYPES[Math.floor(Math.random() * CRIME_TYPES.length)];
+                    const now = new Date();
+                    const minutesAgo = Math.floor(Math.random() * 120);
+                    const crimeTime = new Date(now - minutesAgo * 60000);
+                    return {
+                        ...crimeType,
+                        lat: CONFIG.MAP_CENTER[0] + (Math.random() - 0.5) * 0.1,
+                        lng: CONFIG.MAP_CENTER[1] + (Math.random() - 0.5) * 0.1,
+                        location: `${Math.floor(Math.random() * 9000 + 1000)} ${STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]} ST`,
+                        time: crimeTime.toLocaleTimeString(),
+                        minutesAgo: minutesAgo,
+                        status: minutesAgo < 30 ? 'ACTIVE' : 'LOGGED',
+                        units: Math.floor(Math.random() * 3) + 1,
+                        reportId: `R510-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+                    };
+                });
+                crimeData.sort((a, b) => b.urgency - a.urgency);
+                const newHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+                const isNewCrime = !previousHighPriority || (newHighPriority && newHighPriority.reportId !== previousHighPriority.reportId);
+                updateCrimeMarkers();
+                updateCrimeList();
+                const el = safeGet('crime-status');
+                if (el) el.className = 'status-dot';
+                if (isNewCrime && newHighPriority) {
+                    const newIndex = crimeData.findIndex(c => c.reportId === newHighPriority.reportId);
+                    if (newIndex !== -1) {
+                        focusOnCrime(newIndex);
+                        addLog('error', `HIGH PRIORITY: ${newHighPriority.type} at ${newHighPriority.location}`);
+                    } else {
+                        updateCrimeDetails();
+                    }
+                } else {
+                    updateCrimeDetails();
+                }
+            } catch (err) {
+                console.error('generateCrimeData error:', err);
+                addLog('error', 'CRIME DATA ERROR');
+            }
+        }
+
+        function updateCrimeMarkers() {
+            try {
+                crimeMarkers.forEach(m => {
+                    try { map.removeLayer(m); } catch (e) {}
+                });
+                crimeMarkers = [];
+                crimeData.forEach((crime, idx) => {
+                    try {
+                        const icon = L.divIcon({
+                            html: `<div style="width: 12px; height: 12px; background: ${crime.color}; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 8px ${crime.color};" class="${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>`,
+                            className: '',
+                            iconSize: [12, 12],
+                            iconAnchor: [6, 6]
+                        });
+                        const marker = L.marker([crime.lat, crime.lng], { icon }).addTo(map);
+                        marker.bindPopup(`<div style="font-family: monospace; font-size: 10px;"><strong style="color: ${crime.color};">${crime.type}</strong><br>${crime.location}<br>${crime.time} (${crime.minutesAgo}m ago)<br><span style="color: #6b7280;">ID: ${crime.reportId}</span></div>`);
+                        marker.on('click', () => focusOnCrime(idx));
+                        crimeMarkers.push(marker);
+                    } catch (err) {}
+                });
+            } catch (err) {
+                console.error('updateCrimeMarkers error:', err);
+            }
+        }
+
+        function updateCrimeList() {
+            try {
+                const container = safeGet('crime');
+                const countEl = safeGet('crime-count');
+                if (countEl) countEl.textContent = crimeData.length;
+                if (!container) return;
+                container.innerHTML = crimeData.map((crime, idx) => `
+                    <div class="crime-row ${idx === currentFocusedCrimeIndex ? 'focused' : ''}" onclick="focusOnCrime(${idx})">
+                        <div class="crime-marker ${crime.class} ${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>
+                        <div style="flex: 1;">
+                            <div style="color: ${crime.color}; font-weight: bold;">${crime.type}</div>
+                            <div style="color: #6b7280; font-size: 7px;">${crime.location} • ${crime.minutesAgo}m ago</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {}
+        }
+
+        function updateCrimeDetails() {
+            try {
+                const container = safeGet('crime-details');
+                if (!container) return;
+                const crime = crimeData[currentFocusedCrimeIndex];
+                if (!crime) {
+                    container.innerHTML = '<div style="color: #6b7280; padding: 10px; text-align: center;">NO INCIDENT DATA</div>';
+                    return;
+                }
+                const nameEl = safeGet('focused-crime-name');
+                if (nameEl) nameEl.textContent = crime.type;
+                container.innerHTML = `
+                    <div class="crime-detail-card focused">
+                        <div class="crime-detail-header">
+                            <div class="crime-detail-type" style="color: ${crime.color};">
+                                <div class="crime-marker ${crime.class}"></div>
+                                ${crime.type}
+                            </div>
+                            <div class="crime-detail-urgency ${crime.urgencyLabel.toLowerCase()}">${crime.urgencyLabel} PRIORITY</div>
+                        </div>
+                        <div class="crime-detail-info">
+                            <div class="crime-detail-row"><span class="crime-detail-label">REPORT ID:</span><span>${crime.reportId}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">LOCATION:</span><span>${crime.location}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">TIME:</span><span>${crime.time} (${crime.minutesAgo} minutes ago)</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">STATUS:</span><span style="color: ${crime.status === 'ACTIVE' ? '#EF4444' : '#10b981'};">${crime.status}</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">UNITS:</span><span>${crime.units} dispatched</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">COORD:</span><span style="font-family: monospace; font-size: 7px;">${crime.lat.toFixed(5)}, ${crime.lng.toFixed(5)}</span></div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {}
+        }
+
+        function focusOnCrime(index) {
+            try {
+                if (index < 0 || index >= crimeData.length) return;
+                currentFocusedCrimeIndex = index;
+                const crime = crimeData[index];
+                if (!crime) return;
+                map.setView([crime.lat, crime.lng], 14, { animate: true });
+                if (crimeMarkers[index]) crimeMarkers[index].openPopup();
+                updateCrimeList();
+                updateCrimeDetails();
+                addLog('warn', `FOCUS: ${crime.type} at ${crime.location}`);
+            } catch (err) {}
+        }
+
+        function updateTelemetry(isModal = false) {
+            try {
+                const metrics = [
+                    { label: 'GPU', value: `${Math.floor(Math.random() * 30 + 65)}%` },
+                    { label: 'VRAM', value: `${Math.floor(Math.random() * 10 + 38)}GB` },
+                    { label: 'TPS', value: Math.floor(Math.random() * 50 + 120) }
+                ];
+                const containerId = isModal ? 'modal-telemetry' : 'telemetry';
+                const container = safeGet(containerId);
+                if (!container) return;
+                container.innerHTML = metrics.map(m => `
+                    <div class="telemetry-row">
+                        <span class="telemetry-label">${m.label}</span>
+                        <span class="telemetry-value">${m.value}</span>
+                    </div>
+                `).join('');
+            } catch (err) {}
+        }
+
+        const logBuffer = [];
+        function addLog(level, message) {
+            try {
+                const timestamp = new Date().toLocaleTimeString();
+                logBuffer.unshift({ timestamp, level, message });
+                if (logBuffer.length > 100) logBuffer.pop();
+            } catch (err) {}
+        }
+
+        let uptimeSeconds = 0;
+        function updateTimestamp() {
+            try {
+                const timestampEl = safeGet('timestamp');
+                const uptimeEl = safeGet('uptime');
+                if (timestampEl) timestampEl.textContent = new Date().toLocaleString();
+                uptimeSeconds++;
+                const h = Math.floor(uptimeSeconds / 3600);
+                const m = Math.floor((uptimeSeconds % 3600) / 60);
+                const s = uptimeSeconds % 60;
+                if (uptimeEl) uptimeEl.textContent = `UPTIME: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            } catch (err) {}
+        }
+
+        async function fetchNewsMarquee() {
+            try {
+                const response = await fetch('http://192.168.0.169:8423/feeds');
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                const marquee = safeGet('news-marquee');
+                if (!marquee) return;
+                if (data.items && data.items.length > 0) {
+                    marquee.innerHTML = data.items.map(item => {
+                        const type = item.type === 'news' ? 'news' : 'general';
+                        const color = type === 'news' ? 'traffic' : '';
+                        return `<span class="marquee-item ${color}">【${type.toUpperCase()}】${item.title}</span>`;
+                    }).join('');
+                } else {
+                    marquee.innerHTML = '<span class="marquee-item">NO NEWS FEED</span>';
+                }
+            } catch (error) {
+                const marquee = safeGet('news-marquee');
+                if (marquee) marquee.innerHTML = '<span class="marquee-item">NEWS FEED OFFLINE</span>';
+            }
+        }
+
+        // POLICE SCANNER - CRASH-PROOF VERSION
+        window.toggleScanner = function() {
+            try {
+                const container = safeGet('scanner-transcript');
+                const playBtn = safeGet('scanner-play');
+                const statusSpan = safeGet('scanner-status');
+
+                if (!container || !playBtn || !statusSpan) {
+                    console.error('Scanner elements missing');
+                    addLog('error', 'SCANNER: UI ERROR');
+                    return;
+                }
+
+                if (!scannerPlaying) {
+                    // START SCANNER
+                    scannerPlaying = true;
+                    playBtn.textContent = '⏸ PAUSE';
+                    playBtn.style.background = '#c96c6c';
+                    statusSpan.textContent = 'LIVE';
+                    statusSpan.style.color = '#c96c6c';
+
+                    // Clear container
+                    container.innerHTML = '';
+
+                    // Try audio (may fail due to autoplay policy)
+                    scannerAudio = scannerAudio || safeGet('scanner-audio');
+                    if (scannerAudio) {
+                        scannerAudio.src = CONFIG.SCANNER_STREAM;
+                        scannerAudio.play().catch(() => {});
+                    }
+
+                    // Start transcription with safety checks
+                    startTranscription();
+                    addLog('info', 'SCANNER: STARTED');
+                } else {
+                    // STOP SCANNER
+                    if (scannerAudio) scannerAudio.pause();
+                    scannerPlaying = false;
+                    playBtn.textContent = '▶ PLAY';
+                    playBtn.style.background = '#6eb3c4';
+                    statusSpan.textContent = 'PAUSED';
+                    statusSpan.style.color = '#7a8893';
+
+                    // Stop transcript interval
+                    if (transcriptInterval) {
+                        clearInterval(transcriptInterval);
+                        transcriptInterval = null;
+                    }
+
+                    addLog('info', 'SCANNER: PAUSED');
+                }
+            } catch (err) {
+                console.error('toggleScanner error:', err);
+                addLog('error', 'SCANNER: TOGGLE ERROR');
+            }
+        };
+
+        function startTranscription() {
+            try {
+                const container = safeGet('scanner-transcript');
+                if (!container) {
+                    console.error('Transcript container not found');
+                    return;
+                }
+
+                const transcripts = [
+                    { unit: 'UNIT 214', msg: 'Responding to 4200 Dodge Street, possible 10-91D' },
+                    { unit: 'DISPATCH', msg: 'Copy that 214, backup en route' },
+                    { unit: 'UNIT 189', msg: '10-97, ETA 3 minutes' },
+                    { unit: 'UNIT 214', msg: '10-23, scene secure' },
+                    { unit: 'UNIT 214', msg: 'Requesting supervisor, possible 10-32' },
+                    { unit: 'SGT 05', msg: '10-76 to your location' },
+                    { unit: 'UNIT 189', msg: '10-97 on scene' },
+                    { unit: 'DISPATCH', msg: 'All units advised, suspect vehicle westbound on Dodge' }
+                ];
+
+                let index = 0;
+
+                // Clear any existing interval
+                if (transcriptInterval) {
+                    clearInterval(transcriptInterval);
+                    transcriptInterval = null;
+                }
+
+                // Function to add transcript
+                function addTranscript() {
+                    try {
+                        const c = safeGet('scanner-transcript');
+                        if (!c || !scannerPlaying) return;
+
+                        const t = transcripts[index % transcripts.length];
+                        const timeStr = new Date().toLocaleTimeString();
+
+                        const entry = document.createElement('div');
+                        entry.className = 'transcript-entry';
+                        entry.innerHTML = `
+                            <div>
+                                <span class="transcript-time">[${timeStr}]</span>
+                                <span class="transcript-unit">${t.unit}</span>
+                            </div>
+                            <div class="transcript-msg">${t.msg}</div>
+                        `;
+
+                        c.appendChild(entry);
+
+                        // Auto-scroll to bottom
+                        try {
+                            c.scrollTop = c.scrollHeight;
+                        } catch (e) {}
+
+                        // Keep only last 20
+                        while (c.children.length > 20) {
+                            try {
+                                c.removeChild(c.firstChild);
+                            } catch (e) {
+                                break;
+                            }
+                        }
+
+                        index++;
+
+                        if (t.msg.includes('10-91') || t.msg.includes('10-32')) {
+                            addLog('warn', `SCANNER: ${t.msg.substring(0, 40)}`);
+                        }
+                    } catch (err) {
+                        console.error('addTranscript error:', err);
+                    }
+                }
+
+                // Add first message immediately
+                addTranscript();
+
+                // Start interval for new messages
+                transcriptInterval = setInterval(() => {
+                    if (!scannerPlaying) {
+                        if (transcriptInterval) {
+                            clearInterval(transcriptInterval);
+                            transcriptInterval = null;
+                        }
+                        return;
+                    }
+                    addTranscript();
+                }, 8000);
+
+            } catch (err) {
+                console.error('startTranscription error:', err);
+                addLog('error', 'SCANNER: TRANSCRIPT ERROR');
+            }
+        }
+
+        // INITIALIZE
+        console.log('R510 Dashboard initializing...');
+        updateTelemetry();
+        addLog('info', 'R510 COMMAND CENTER INITIALIZED');
+        addLog('info', 'CRIME SURVEILLANCE ACTIVE');
+
+        // Wait for DOM to be fully ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initMap);
+        } else {
+            initMap();
+        }
+
+        setTimeout(fetchNewsMarquee, 2000);
+
+        // Auto-start scanner after delay
+        setTimeout(() => {
+            try {
+                const container = safeGet('scanner-transcript');
+                if (container) {
+                    window.toggleScanner();
+                    addLog('info', 'SCANNER: AUTO-STARTED');
+                } else {
+                    console.error('Scanner container not ready');
+                }
+            } catch (err) {
+                console.error('Scanner auto-start failed:', err);
+            }
+        }, 5000);
+
+        // Set up intervals
+        setInterval(() => fetchAircraftData(), CONFIG.UPDATE_INTERVAL);
+        setInterval(updateTimestamp, 1000);
+        setInterval(updateTelemetry, 3000);
+        setInterval(() => {
+            try {
+                generateCrimeData();
+                addLog('info', 'CRIME DATA REFRESH');
+            } catch (err) {}
+        }, 60000);
+        setInterval(() => {
+            fetchNewsMarquee();
+            addLog('info', 'NEWS FEED REFRESH');
+        }, 300000);
+
+        setTimeout(() => addLog('info', 'ADS-B ONLINE'), 2000);
+        setTimeout(() => addLog('warn', 'SHAGGOTH-A1 OFFLINE'), 3000);
+
+        console.log('R510 Dashboard ready');
+    </script>
+</body>
+</html>

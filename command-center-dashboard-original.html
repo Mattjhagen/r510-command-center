@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0518;
+            color: #A855F7;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            font-size: 11px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        /* HEADER */
+        .header {
+            background: #1a0a2e;
+            color: #9ca3af;
+            padding: 6px 16px;
+            border: 1px solid #5B21B6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            font-size: 10px;
+            color: #9ca3af;
+        }
+
+        .header-right {
+            color: #9ca3af;
+            font-size: 10px;
+        }
+
+        /* MAIN GRID */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 240px 1fr 380px;
+            grid-template-rows: 1fr 1fr;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        /* PANELS */
+        .panel {
+            background: #150a28;
+            border: 1px solid #5B21B6;
+            padding: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #9ca3af;
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #5B21B6;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* SCROLLBAR */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #150a28;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #5B21B6;
+        }
+
+        /* LEFT COLUMN */
+        .left-col {
+            grid-column: 1;
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* CRITICAL ALERT */
+        .critical-alert {
+            background: #1a0000;
+            border: 2px solid #EF4444;
+            padding: 12px;
+            text-align: center;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .alert-icon {
+            color: #EF4444;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .alert-text {
+            color: #EF4444;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+
+        /* SERVICES TABLE */
+        .services-table {
+            width: 100%;
+            font-size: 10px;
+        }
+
+        .services-table td {
+            padding: 3px;
+            border-bottom: 1px solid #1e1e32;
+        }
+
+        .service-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .service-indicator.online {
+            background: #06b6d4;
+            box-shadow: 0 0 6px #06b6d4;
+        }
+
+        .service-indicator.offline {
+            background: #4a4a6a;
+        }
+
+        /* TELEMETRY BARS */
+        .telemetry-bar {
+            margin: 6px 0;
+        }
+
+        .telemetry-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 9px;
+        }
+
+        .telemetry-label-name {
+            color: #8888aa;
+        }
+
+        .telemetry-label-value {
+            color: #4ADE80;
+            font-weight: bold;
+        }
+
+        .telemetry-bar-bg {
+            height: 4px;
+            background: #1e1e32;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .telemetry-bar-fill {
+            height: 100%;
+            background: #A855F7;
+            transition: width 0.5s;
+        }
+
+        /* STATUS BUTTON */
+        .status-button {
+            background: #4ADE80;
+            color: #000;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 4px;
+            box-shadow: 0 0 10px #4ADE80;
+            animation: glow 2s infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 10px #4ADE80; }
+            50% { box-shadow: 0 0 20px #4ADE80; }
+        }
+
+        /* FLIGHT TABLE */
+        .flight-table {
+            width: 100%;
+            font-size: 9px;
+            border-collapse: collapse;
+        }
+
+        .flight-table th {
+            color: #9ca3af;
+            border-bottom: 1px solid #5B21B6;
+            padding: 4px 2px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: #150a28;
+            font-size: 9px;
+        }
+
+        .flight-table td {
+            color: #e5e7eb;
+            padding: 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.3);
+            font-size: 9px;
+        }
+
+        /* LOG LINES */
+        .log-line {
+            font-size: 9px;
+            padding: 2px 0;
+            border-bottom: 1px solid #1e1e32;
+            color: #8888aa;
+        }
+
+        .log-time {
+            color: #4ADE80;
+        }
+
+        .log-level {
+            color: #A855F7;
+        }
+
+        /* MAP CONTAINER */
+        .map-container {
+            position: relative;
+            background: #000;
+            height: 100%;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(10, 0, 16, 0.9);
+            padding: 4px 8px;
+            border: 1px solid #A855F7;
+            font-size: 9px;
+            z-index: 10;
+        }
+
+        .map-url {
+            color: #06b6d4;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* SCRAPED INFO TABLE */
+        .scraped-table {
+            width: 100%;
+            font-size: 8px;
+            border-collapse: collapse;
+        }
+
+        .scraped-table th {
+            color: #9ca3af;
+            border-bottom: 1px solid #5B21B6;
+            padding: 3px 2px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: #150a28;
+            font-size: 8px;
+        }
+
+        .scraped-table td {
+            color: #e5e7eb;
+            padding: 3px 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.3);
+            vertical-align: top;
+            font-size: 8px;
+        }
+
+        .redacted {
+            background: #06b6d4;
+            color: #000;
+            padding: 0 4px;
+            font-weight: bold;
+        }
+
+        /* METRIC GRAPH */
+        .metric-graph {
+            height: 100px;
+            position: relative;
+        }
+
+        .graph-label {
+            position: absolute;
+            font-size: 7px;
+            color: #9ca3af;
+        }
+
+        /* FOOTER */
+        .footer {
+            background: #150a28;
+            border: 1px solid #5B21B6;
+            padding: 6px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+        }
+
+        .time-display {
+            color: #9ca3af;
+            font-weight: normal;
+        }
+
+        /* INFRASTRUCTURE BARS */
+        .infra-bars {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .infra-bar-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .infra-bar-value {
+            color: #4ADE80;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .infra-bar-label {
+            color: #8888aa;
+            font-size: 8px;
+        }
+
+        .infra-bar-visual {
+            height: 60px;
+            background: #1e1e32;
+            margin-top: 4px;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .infra-bar-visual-fill {
+            width: 100%;
+            background: linear-gradient(to top, #A855F7, #A855F750);
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-left">[CLASSIFIED // ORBITAL AI] R510 - ORBITAL AI COMMAND CENTER - NODE 01</div>
+            <div class="header-right">OLLAMA - SHAGGOTH ENGINE V5.1</div>
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div class="left-col">
+                <!-- METRIC GRAPH -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <canvas id="metric-graph" width="240" height="100" style="width: 100%;"></canvas>
+                </div>
+
+                <!-- CRITICAL ALERT -->
+                <div class="critical-alert">
+                    <div class="alert-icon">!</div>
+                    <div class="alert-text">1 ISSUE<br/>INTEGRITY FAULT</div>
+                </div>
+
+                <!-- SERVICES PANEL -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <div class="panel-title">SERVICES / NODES STATUS</div>
+                    <div class="panel-content">
+                        <table class="services-table">
+                            <tr>
+                                <td><span class="service-indicator online"></span>SERVICES</td>
+                                <td style="color: #4ADE80; text-align: right;">1133303</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator online"></span>HOSES</td>
+                                <td style="color: #4ADE80; text-align: right;">ONLINE</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator online"></span>SHAGGOTH</td>
+                                <td style="color: #4ADE80; text-align: right;">V5.1</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator offline"></span>NODE_02</td>
+                                <td style="color: #8888aa; text-align: right;">OFFLINE</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator online"></span>OLLAMA</td>
+                                <td style="color: #4ADE80; text-align: right;">ACTIVE</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TELEMETRY PANEL -->
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">TELEMETRY</div>
+                    <div class="panel-content">
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">NETWORK_RX</span>
+                                <span class="telemetry-label-value" id="net-rx">2300</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="bar-rx" style="width: 65%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">NETWORK_TX</span>
+                                <span class="telemetry-label-value" id="net-tx">31309</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="bar-tx" style="width: 85%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">CPU_LOAD</span>
+                                <span class="telemetry-label-value" id="cpu-load">23909</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="bar-cpu" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">MEMORY</span>
+                                <span class="telemetry-label-value" id="memory">18742</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="bar-mem" style="width: 72%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="infra-bars">
+                            <div class="infra-bar-item">
+                                <div class="infra-bar-value">302073</div>
+                                <div class="infra-bar-label">NODES</div>
+                                <div class="infra-bar-visual">
+                                    <div class="infra-bar-visual-fill" style="height: 78%;"></div>
+                                </div>
+                            </div>
+                            <div class="infra-bar-item">
+                                <div class="infra-bar-value">160002</div>
+                                <div class="infra-bar-label">LOAD</div>
+                                <div class="infra-bar-visual">
+                                    <div class="infra-bar-visual-fill" style="height: 45%;"></div>
+                                </div>
+                            </div>
+                            <div class="infra-bar-item">
+                                <div class="infra-bar-value">89421</div>
+                                <div class="infra-bar-label">ACTIVE</div>
+                                <div class="infra-bar-visual">
+                                    <div class="infra-bar-visual-fill" style="height: 92%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STATUS BUTTON -->
+                <div class="status-button">TS_OPEN</div>
+
+                <!-- SYSTEM CONTROLS -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <div class="panel-content" style="font-size: 9px; color: #8888aa;">
+                        <div>SCAN ACCT</div>
+                        <div>Keys: [CTRL+S] [CTRL+K]</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER TOP - FLIGHT TABLE -->
+            <div class="panel" style="grid-column: 2; grid-row: 1;">
+                <div class="panel-title">LIVE AIR TRAFFIC DATA // ADSB FEED</div>
+                <div class="panel-content" id="flight-data"></div>
+            </div>
+
+            <!-- CENTER BOTTOM - OPERATIONAL LOGS -->
+            <div class="panel" style="grid-column: 2; grid-row: 2;">
+                <div class="panel-title">SERVER OPERATIONAL LOGS // CLASSIFIED</div>
+                <div class="panel-content" id="log-feed"></div>
+            </div>
+
+            <!-- RIGHT TOP - MAP -->
+            <div class="panel" style="grid-column: 3; grid-row: 1;">
+                <div class="panel-title">LIVE FEED // SIGINT</div>
+                <div class="panel-content" style="padding: 0; position: relative;">
+                    <div class="map-container">
+                        <div class="map-overlay">
+                            <div style="color: #9ca3af; font-size: 8px; margin-bottom: 2px;">[LIVE-FEED // SIGINT]</div>
+                            <div class="map-url" style="font-size: 9px;">(http://192.168.0.4/map.php)</div>
+                        </div>
+                        <canvas id="map-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT BOTTOM - SCRAPED INFO -->
+            <div class="panel" style="grid-column: 3; grid-row: 2;">
+                <div class="panel-title">SCRAPED INFORMATION // CIA.GOV READINGROOM // TOP SECRET SENSITIVE</div>
+                <div class="panel-content" id="scraped-data"></div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div style="color: #9ca3af; font-size: 9px;">[CLASSIFIED // DEEP_ACCESS] NODE_01</div>
+            <div class="time-display" id="time-display" style="font-size: 9px;">TIME: 00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        // ===== CONFIGURATION =====
+        const CONFIG = {
+            // Flightradar24 MCP Integration
+            FR24_MCP_ENDPOINT: "http://localhost:8000/fr24",
+            FR24_ENABLED: false, // Set to true when fr24api-mcp is running
+
+            // Fallback to local dump1090
+            DUMP1090_ENDPOINT: "http://192.168.0.4/data/aircraft.json",
+            DUMP1090_ENABLED: false,
+
+            // Broadcastify Integration
+            BROADCASTIFY_STATUS: "PENDING_APPROVAL", // Douglas County app pending
+            BROADCASTIFY_ENDPOINT: "http://localhost:8080/broadcastify",
+
+            // SDR Hardware
+            SDR_HARDWARE_CONNECTED: false, // Set to true when RTL-SDR v4 is connected
+
+            // Crime/CAD Integration
+            CRIME_API_ENDPOINT: "https://api.spotcrime.com/crimes.json",
+            CRIME_API_KEY: "", // Set to enable real API
+            CRIME_LAT: 41.2565, // Omaha, NE
+            CRIME_LON: -95.9345,
+            CRIME_RADIUS: 0.05,
+
+            // Map Configuration
+            MAP_CENTER_LAT: 41.2565, // Omaha, NE
+            MAP_CENTER_LON: -95.9345,
+            MAP_LAT_RANGE: 10,
+            MAP_LON_RANGE: 15,
+
+            // Update Intervals
+            FLIGHT_UPDATE_INTERVAL: 5000,  // 5 seconds
+            CRIME_UPDATE_INTERVAL: 60000,  // 60 seconds
+            TELEMETRY_UPDATE_INTERVAL: 2000, // 2 seconds
+            LOG_UPDATE_INTERVAL: 500 // 0.5 seconds
+        };
+
+        // ===== STATE MANAGEMENT =====
+        const STATE = {
+            flights: [],
+            crimes: [],
+            bcfyCalls: [],
+            fr24Connected: false,
+            sdtConnected: false
+        };
+
+        // METRIC GRAPH
+        function drawMetricGraph() {
+            const canvas = document.getElementById('metric-graph');
+            const ctx = canvas.getContext('2d');
+
+            // Clear
+            ctx.fillStyle = '#150a28';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            ctx.strokeStyle = '#5B21B6';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Draw loss curve
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const points = [];
+            for (let x = 0; x < canvas.width; x += 2) {
+                const t = x / canvas.width;
+                const y = canvas.height * 0.8 - (Math.exp(-t * 3) * canvas.height * 0.5);
+                points.push({x, y});
+            }
+
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+
+            // Add labels
+            ctx.fillStyle = '#9ca3af';
+            ctx.font = '8px monospace';
+            ctx.fillText('LOSS', 5, 12);
+            ctx.fillText('5.0000', 5, 25);
+            ctx.fillText('2.5000', 5, 50);
+            ctx.fillText('0.0000', 5, canvas.height - 5);
+            ctx.fillText('EPOCH', canvas.width - 35, canvas.height - 5);
+        }
+
+        // ===== FLIGHT DATA INTEGRATION =====
+        const airlines = ['ASB', 'SWA', 'UAL', 'DAL', 'AAL', 'JBU', 'ASA', 'SKW'];
+        const flightData = [];
+
+        // Fetch from Flightradar24 MCP
+        async function fetchFR24Data() {
+            try {
+                const response = await fetch(`${CONFIG.FR24_MCP_ENDPOINT}/live/flight-positions/full`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bounds: {
+                            north: 43.5,
+                            south: 40.0,
+                            west: -97.5,
+                            east: -94.5
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    STATE.fr24Connected = true;
+
+                    // Transform FR24 data to our format
+                    STATE.flights = data.aircraft.map(a => ({
+                        id: a.callsign || a.hex,
+                        lat: a.latitude,
+                        lon: a.longitude,
+                        alt: Math.floor(a.altitude || 0),
+                        speed: Math.floor(a.ground_speed || 0),
+                        track: a.heading || 0,
+                        squawk: a.squawk || '0000'
+                    }));
+
+                    return true;
+                }
+            } catch (error) {
+                console.warn('FR24 MCP unavailable:', error.message);
+                STATE.fr24Connected = false;
+            }
+            return false;
+        }
+
+        // Fetch from local dump1090
+        async function fetchDump1090Data() {
+            try {
+                const response = await fetch(CONFIG.DUMP1090_ENDPOINT);
+                if (response.ok) {
+                    const data = await response.json();
+
+                    STATE.flights = data.aircraft
+                        .filter(a => a.lat && a.lon)
+                        .map(a => ({
+                            id: a.flight?.trim() || a.hex,
+                            lat: a.lat,
+                            lon: a.lon,
+                            alt: Math.floor(a.altitude || 0),
+                            speed: Math.floor(a.gs || 0),
+                            track: a.track || 0,
+                            squawk: a.squawk || '0000'
+                        }));
+
+                    return true;
+                }
+            } catch (error) {
+                console.warn('dump1090 unavailable:', error.message);
+            }
+            return false;
+        }
+
+        // Generate simulated flight data
+        function generateSimulatedFlightData() {
+            STATE.flights = [];
+            for (let i = 0; i < 50; i++) {
+                const airline = airlines[Math.floor(Math.random() * airlines.length)];
+                const flightNum = Math.floor(Math.random() * 9000) + 100;
+
+                // Generate coordinates around Omaha
+                const latOffset = (Math.random() - 0.5) * CONFIG.MAP_LAT_RANGE * 0.8;
+                const lonOffset = (Math.random() - 0.5) * CONFIG.MAP_LON_RANGE * 0.8;
+
+                STATE.flights.push({
+                    id: `${airline}${flightNum}`,
+                    lat: CONFIG.MAP_CENTER_LAT + latOffset,
+                    lon: CONFIG.MAP_CENTER_LON + lonOffset,
+                    alt: Math.floor(Math.random() * 40000) + 5000,
+                    speed: Math.floor(Math.random() * 200) + 350,
+                    track: Math.floor(Math.random() * 360),
+                    squawk: Math.floor(Math.random() * 6777) + 1000
+                });
+            }
+        }
+
+        // Main flight data update function
+        async function updateFlightData() {
+            let success = false;
+
+            // Try FR24 MCP first
+            if (CONFIG.FR24_ENABLED) {
+                success = await fetchFR24Data();
+                if (success) {
+                    console.log(`[FR24-MCP] ${STATE.flights.length} aircraft received`);
+                }
+            }
+
+            // Try dump1090 fallback
+            if (!success && CONFIG.DUMP1090_ENABLED) {
+                success = await fetchDump1090Data();
+                if (success) {
+                    console.log(`[DUMP1090] ${STATE.flights.length} aircraft received`);
+                }
+            }
+
+            // Use simulated data as final fallback
+            if (!success) {
+                generateSimulatedFlightData();
+                console.log('[SIMULATED] Using simulated flight data');
+            }
+
+            // Update the flight table display
+            updateFlightTable();
+
+            // Copy to global flightData for map rendering
+            flightData.length = 0;
+            flightData.push(...STATE.flights);
+        }
+
+        function updateFlightTable() {
+            const container = document.getElementById('flight-data');
+            container.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.className = 'flight-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>ICAO</th>
+                        <th>FLIGHT</th>
+                        <th>ALTITUDE</th>
+                        <th>GS_SPEED</th>
+                        <th>TRACK</th>
+                        <th>LAT</th>
+                        <th>LON</th>
+                        <th>SQUAWK</th>
+                    </tr>
+                </thead>
+                <tbody id="flight-tbody"></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            // Display up to 100 flights
+            STATE.flights.slice(0, 100).forEach(flight => {
+                const row = document.createElement('tr');
+                const altStr = flight.alt.toString().padStart(6, '0') + 'ft';
+
+                row.innerHTML = `
+                    <td>${flight.id}.</td>
+                    <td>${flight.id}</td>
+                    <td>${altStr}</td>
+                    <td>${flight.speed}kt+</td>
+                    <td>${flight.track}°</td>
+                    <td>${flight.lat.toFixed(2)}°</td>
+                    <td>${flight.lon.toFixed(2)}°</td>
+                    <td>${flight.squawk}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            container.appendChild(table);
+        }
+
+        // LOG GENERATOR
+        const logLevels = ['INFO', 'WARN', 'ERROR', 'DEBUG'];
+        const logMessages = [
+            'Kernel update applied. V5.1 -> V5.2. Success.',
+            'Neural network sync completed.',
+            'Database checkpoint created.',
+            'Encryption handshake established.',
+            'Memory allocation optimized.',
+            'Network packet inspection complete.',
+            'Authentication token refreshed.',
+            'Cache invalidation triggered.',
+            'Thread pool resized: 16 -> 24.',
+            'SSL certificate renewed.',
+            'API rate limit enforced.',
+            'Backup snapshot created.',
+            'File integrity check passed.',
+            'Service dependency resolved.',
+            'Configuration reloaded.',
+        ];
+
+        function generateLog() {
+            const container = document.getElementById('log-feed');
+
+            setInterval(() => {
+                const now = new Date();
+                const timestamp = now.toISOString().replace('T', ' ').substring(0, 23);
+                const level = logLevels[Math.floor(Math.random() * logLevels.length)];
+                const message = logMessages[Math.floor(Math.random() * logMessages.length)];
+
+                const logLine = document.createElement('div');
+                logLine.className = 'log-line';
+                logLine.innerHTML = `<span class="log-time">[${timestamp}]</span> <span class="log-level">${level}</span>: [NODE 01] - ${message}`;
+
+                container.insertBefore(logLine, container.firstChild);
+
+                // Keep only last 100 lines
+                while (container.children.length > 100) {
+                    container.removeChild(container.lastChild);
+                }
+            }, 500);
+        }
+
+        // MAP RENDERER
+        function initMap() {
+            const canvas = document.getElementById('map-canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Map center: LAT 57.762821, LONG 26.211670
+            const centerLat = 57.762821;
+            const centerLon = 26.211670;
+            const latRange = 10;
+            const lonRange = 15;
+
+            function resize() {
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+            }
+
+            resize();
+            window.addEventListener('resize', resize);
+
+            function latLonToXY(lat, lon) {
+                const x = ((lon - (centerLon - lonRange / 2)) / lonRange) * canvas.width;
+                const y = canvas.height - ((lat - (centerLat - latRange / 2)) / latRange) * canvas.height;
+                return {x, y};
+            }
+
+            function drawMap() {
+                ctx.fillStyle = '#0d0518';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw grid
+                ctx.strokeStyle = '#5B21B6';
+                ctx.lineWidth = 0.5;
+                const gridSize = 40;
+                for (let x = 0; x < canvas.width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < canvas.height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+
+                // Draw center crosshair
+                const center = latLonToXY(centerLat, centerLon);
+                ctx.strokeStyle = '#A855F7';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(center.x - 10, center.y);
+                ctx.lineTo(center.x + 10, center.y);
+                ctx.moveTo(center.x, center.y - 10);
+                ctx.lineTo(center.x, center.y + 10);
+                ctx.stroke();
+
+                // Draw flight paths and aircraft
+                flightData.forEach((flight, i) => {
+                    const pos = latLonToXY(flight.lat, flight.lon);
+
+                    if (pos.x < 0 || pos.x > canvas.width || pos.y < 0 || pos.y > canvas.height) {
+                        return;
+                    }
+
+                    // Draw track line (trail)
+                    const trackRad = (flight.track * Math.PI) / 180;
+                    const trailLength = 30;
+                    const trailX = pos.x - Math.sin(trackRad) * trailLength;
+                    const trailY = pos.y + Math.cos(trackRad) * trailLength;
+
+                    ctx.strokeStyle = '#7c3aed';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(trailX, trailY);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+
+                    // Draw aircraft icon (X symbol)
+                    ctx.strokeStyle = '#06b6d4';
+                    ctx.lineWidth = 2;
+                    const size = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x - size, pos.y - size);
+                    ctx.lineTo(pos.x + size, pos.y + size);
+                    ctx.moveTo(pos.x + size, pos.y - size);
+                    ctx.lineTo(pos.x - size, pos.y + size);
+                    ctx.stroke();
+
+                    // Draw label every 5th flight
+                    if (i % 5 === 0) {
+                        ctx.fillStyle = '#e5e7eb';
+                        ctx.font = '8px monospace';
+                        const textX = pos.x + 8;
+                        const textY = pos.y - 2;
+                        ctx.fillText(flight.id, textX, textY);
+                        ctx.fillText(`${flight.speed}kt`, textX, textY + 10);
+                        ctx.fillText(flight.alt.substring(0, 5), textX, textY + 20);
+                    }
+                });
+            }
+
+            setInterval(drawMap, 100);
+        }
+
+        // SCRAPED DATA GENERATOR
+        const projects = [
+            'PROJECT PHOENIX', 'PROJECT ARTICHOKE', 'PROJECT BLUEBIRD',
+            'PROJECT MKNAOMI', 'PROJECT STARGATE', 'PROJECT GRUDGE'
+        ];
+        const topics = [
+            'Asset infiltrated node', 'Signal intercept confirmed',
+            'Deep cover operative status', 'Technical surveillance initiated',
+            'Intelligence gathering operation', 'Classified documentation retrieved'
+        ];
+
+        function generateScrapedData() {
+            const table = document.createElement('table');
+            table.className = 'scraped-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>SOURCE</th>
+                        <th>PROJECT</th>
+                        <th>TOPIC</th>
+                        <th>EXTRACT</th>
+                    </tr>
+                </thead>
+                <tbody id="scraped-tbody"></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            const docs = [
+                {
+                    source: 'CIA.GOV // RR',
+                    project: 'PHOENIX',
+                    topic: 'Unconventional Warfare',
+                    extract: 'Asset <span class="redacted">BLACKBIRD</span> successfully infiltrated. Current standing: deep cover operative. Mission status: <span class="redacted">CLASSIFIED</span>.'
+                },
+                {
+                    source: 'CIA.GOV // RR',
+                    project: 'STARLIGHT',
+                    topic: 'Cold War Espionage',
+                    extract: 'Signal intercept on <span class="redacted">DELTA</span> confirmed. Technical surveillance operation initiated against target <span class="redacted">OMEGA-7</span>.'
+                },
+                {
+                    source: 'CIA.GOV // RR',
+                    project: 'Analysis Report',
+                    topic: 'Orbital Debris',
+                    extract: 'Debris field expanding over Northern sector. Potential hazard to <span class="redacted">CLASSIFIED</span> assets.'
+                },
+                {
+                    source: 'CIA.GOV // RR',
+                    project: 'CaMEL 123-A',
+                    topic: 'Diplomatic Signals',
+                    extract: 'Confidential cable reveals <span class="redacted">BLACKBIRD</span> reporting track positions. Status: intercepted by foreign intelligence.'
+                },
+                {
+                    source: 'DOD // SIGINT',
+                    project: 'ARTICHOKE',
+                    topic: 'Technical Intelligence',
+                    extract: 'Equipment authorization granted. Surveillance package <span class="redacted">VICTOR-9</span> deployed to designated target zone.'
+                },
+                {
+                    source: 'NSA // RR',
+                    project: 'GRUDGE',
+                    topic: 'Signals Analysis',
+                    extract: 'Pattern analysis complete. Frequency hopping detected on channel <span class="redacted">THETA</span>. Decryption in progress.'
+                }
+            ];
+
+            docs.forEach(doc => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${doc.source}</td>
+                    <td style="color: #e5e7eb;">${doc.project}</td>
+                    <td>${doc.topic}</td>
+                    <td>${doc.extract}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            document.getElementById('scraped-data').appendChild(table);
+        }
+
+        // TIME UPDATE
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toTimeString().substring(0, 8);
+            document.getElementById('time-display').textContent = `TIME: ${timeStr}`;
+        }
+
+        // TELEMETRY UPDATE
+        function updateTelemetry() {
+            setInterval(() => {
+                document.getElementById('net-rx').textContent = Math.floor(Math.random() * 10000) + 1000;
+                document.getElementById('net-tx').textContent = Math.floor(Math.random() * 40000) + 10000;
+                document.getElementById('cpu-load').textContent = Math.floor(Math.random() * 30000) + 10000;
+                document.getElementById('memory').textContent = Math.floor(Math.random() * 25000) + 10000;
+
+                document.getElementById('bar-rx').style.width = (Math.random() * 40 + 40) + '%';
+                document.getElementById('bar-tx').style.width = (Math.random() * 40 + 40) + '%';
+                document.getElementById('bar-cpu').style.width = (Math.random() * 40 + 30) + '%';
+                document.getElementById('bar-mem').style.width = (Math.random() * 40 + 50) + '%';
+            }, 2000);
+        }
+
+        // INITIALIZE
+        drawMetricGraph();
+        generateFlightData();
+        generateLog();
+        initMap();
+        generateScrapedData();
+        updateTime();
+        setInterval(updateTime, 1000);
+        updateTelemetry();
+    </script>
+</body>
+</html>

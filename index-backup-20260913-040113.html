@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER - NODE 01</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #040406;
+            color: #9ca3af;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            font-size: 10px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            padding: 3px;
+            gap: 3px;
+        }
+
+        /* HEADER */
+        .header {
+            background: #0d0518;
+            color: #9ca3af;
+            padding: 5px 12px;
+            border: 1px solid #5B21B6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+
+        .header-status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 6px #10b981;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+            box-shadow: 0 0 6px #ef4444;
+        }
+
+        /* MAIN GRID */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 220px 1fr 360px;
+            grid-template-rows: 1fr 1fr 140px;
+            gap: 3px;
+            overflow: hidden;
+        }
+
+        /* PANELS */
+        .panel {
+            background: #0d0518;
+            border: 1px solid #5B21B6;
+            padding: 6px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #6b7280;
+            font-weight: bold;
+            font-size: 8px;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #5B21B6;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #5B21B6;
+        }
+
+        /* LEFT COLUMN */
+        .left-col {
+            grid-column: 1;
+            grid-row: 1 / 4;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        /* METRIC GRAPH */
+        .metric-graph-panel {
+            flex: 0 0 auto;
+        }
+
+        /* CRITICAL ALERT */
+        .critical-alert {
+            background: #1a0000;
+            border: 2px solid #EF4444;
+            padding: 8px;
+            text-align: center;
+            animation: alert-pulse 1s infinite;
+            flex: 0 0 auto;
+        }
+
+        @keyframes alert-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .alert-icon {
+            color: #EF4444;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .alert-text {
+            color: #EF4444;
+            font-weight: bold;
+            margin-top: 3px;
+            font-size: 9px;
+        }
+
+        /* SERVICES TABLE */
+        .services-table {
+            width: 100%;
+            font-size: 8px;
+        }
+
+        .services-table td {
+            padding: 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.3);
+        }
+
+        .service-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+
+        .service-indicator.online {
+            background: #06b6d4;
+            box-shadow: 0 0 4px #06b6d4;
+        }
+
+        .service-indicator.offline {
+            background: #4a4a6a;
+        }
+
+        /* TELEMETRY */
+        .telemetry-bar {
+            margin: 4px 0;
+        }
+
+        .telemetry-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 8px;
+        }
+
+        .telemetry-label-name {
+            color: #6b7280;
+        }
+
+        .telemetry-label-value {
+            color: #4ADE80;
+            font-weight: bold;
+        }
+
+        .telemetry-bar-bg {
+            height: 3px;
+            background: #1e1e32;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .telemetry-bar-fill {
+            height: 100%;
+            background: #A855F7;
+            transition: width 0.5s;
+        }
+
+        /* STATUS BUTTON */
+        .status-button {
+            background: #4ADE80;
+            color: #000;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 3px;
+            box-shadow: 0 0 8px #4ADE80;
+            animation: btn-glow 2s infinite;
+            flex: 0 0 auto;
+        }
+
+        @keyframes btn-glow {
+            0%, 100% { box-shadow: 0 0 8px #4ADE80; }
+            50% { box-shadow: 0 0 14px #4ADE80; }
+        }
+
+        /* DATA TABLES */
+        .data-table {
+            width: 100%;
+            font-size: 8px;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            color: #6b7280;
+            border-bottom: 1px solid #5B21B6;
+            padding: 3px 2px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: #0d0518;
+            font-weight: bold;
+        }
+
+        .data-table td {
+            color: #e5e7eb;
+            padding: 2px;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.2);
+        }
+
+        /* CRIME FEED SPECIFIC */
+        .crime-row-critical {
+            animation: crime-flash 1s infinite;
+        }
+
+        @keyframes crime-flash {
+            0%, 100% { background: transparent; }
+            50% { background: rgba(239, 68, 68, 0.1); }
+        }
+
+        .crime-type-critical {
+            color: #EF4444;
+            font-weight: bold;
+        }
+
+        .crime-type-high {
+            color: #f59e0b;
+        }
+
+        .crime-type-medium {
+            color: #06b6d4;
+        }
+
+        /* LOG LINES */
+        .log-line {
+            font-size: 8px;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(91, 33, 182, 0.2);
+            color: #6b7280;
+        }
+
+        .log-time {
+            color: #4ADE80;
+        }
+
+        .log-level {
+            color: #A855F7;
+        }
+
+        /* MAP */
+        .map-container {
+            position: relative;
+            background: #000;
+            height: 100%;
+        }
+
+        .map-overlay {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(13, 5, 24, 0.95);
+            padding: 3px 6px;
+            border: 1px solid #5B21B6;
+            font-size: 8px;
+            z-index: 10;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* REDACTED TEXT */
+        .redacted {
+            background: #06b6d4;
+            color: #000;
+            padding: 0 3px;
+            font-weight: bold;
+        }
+
+        /* FOOTER */
+        .footer {
+            background: #0d0518;
+            border: 1px solid #5B21B6;
+            padding: 4px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-left">[CLASSIFIED // ORBITAL AI] R510 - ORBITAL AI COMMAND CENTER - NODE 01</div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="crime-api-status"></div>
+                    <span>CRIME API</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="bcfy-status"></div>
+                    <span>BCFY</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>SHAGGOTH</span>
+                </div>
+                <span id="utc-time">00:00:00 UTC</span>
+            </div>
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN -->
+            <div class="left-col">
+                <!-- METRIC GRAPH -->
+                <div class="panel metric-graph-panel">
+                    <div class="panel-title">SHAGGOTH-A1 TRAINING</div>
+                    <canvas id="metric-graph" width="220" height="90" style="width: 100%;"></canvas>
+                    <div style="font-size: 7px; color: #6b7280; margin-top: 3px;">
+                        <div>Loss: 0.182 | Ctx: 32k | GPU: 48°C</div>
+                        <div>Scraper: github.com/Mattjhagen/...</div>
+                    </div>
+                </div>
+
+                <!-- CRITICAL ALERT -->
+                <div class="critical-alert">
+                    <div class="alert-icon">!</div>
+                    <div class="alert-text">1 ISSUE<br/>INTEGRITY FAULT</div>
+                </div>
+
+                <!-- SERVICES -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <div class="panel-title">SERVICES / NODES</div>
+                    <div class="panel-content">
+                        <table class="services-table">
+                            <tr>
+                                <td><span class="service-indicator online"></span>OLLAMA</td>
+                                <td style="color: #4ADE80; text-align: right;">V5.1</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator online"></span>SHAGGOTH</td>
+                                <td style="color: #4ADE80; text-align: right;">ACTIVE</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator online"></span>TAILSCALE</td>
+                                <td style="color: #4ADE80; text-align: right;">UP</td>
+                            </tr>
+                            <tr>
+                                <td><span class="service-indicator offline"></span>NODE_02</td>
+                                <td style="color: #6b7280; text-align: right;">OFFLINE</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TELEMETRY -->
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">TELEMETRY</div>
+                    <div class="panel-content">
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">CPU</span>
+                                <span class="telemetry-label-value" id="cpu-val">45%</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="cpu-bar" style="width: 45%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">MEMORY</span>
+                                <span class="telemetry-label-value" id="mem-val">68%</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="mem-bar" style="width: 68%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">NETWORK_RX</span>
+                                <span class="telemetry-label-value" id="net-rx-val">1.2MB/s</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="net-rx-bar" style="width: 52%;"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-bar">
+                            <div class="telemetry-label">
+                                <span class="telemetry-label-name">DISK_IO</span>
+                                <span class="telemetry-label-value" id="disk-val">340KB/s</span>
+                            </div>
+                            <div class="telemetry-bar-bg">
+                                <div class="telemetry-bar-fill" id="disk-bar" style="width: 28%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STATUS BUTTON -->
+                <div class="status-button">TS_OPEN</div>
+
+                <!-- SYSTEM CONTROLS -->
+                <div class="panel" style="flex: 0 0 auto;">
+                    <div style="font-size: 8px; color: #6b7280;">
+                        <div>BEEP AC2223 :: Keys</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER TOP - MAP -->
+            <div class="panel" style="grid-column: 2; grid-row: 1 / 3;">
+                <div class="panel-title">LIVE UNIFIED SIGINT & INCIDENT MAP</div>
+                <div class="panel-content" style="padding: 0; position: relative;">
+                    <div class="map-container">
+                        <div class="map-overlay">
+                            <div style="margin-bottom: 2px;">[LIVE-FEED // SIGINT]</div>
+                            <div style="color: #06b6d4;">Air Traffic: FR24 API</div>
+                            <div style="color: #EF4444;">Crime: SpotCrime API</div>
+                        </div>
+                        <canvas id="map-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER BOTTOM - BROADCASTIFY -->
+            <div class="panel" style="grid-column: 2; grid-row: 3;">
+                <div class="panel-title">BROADCASTIFY CALLS // LIVE P25 DISPATCH STREAM</div>
+                <div class="panel-content" id="bcfy-feed"></div>
+            </div>
+
+            <!-- RIGHT TOP - CRIME FEED -->
+            <div class="panel" style="grid-column: 3; grid-row: 1;">
+                <div class="panel-title">SPOTCRIME / NEIGHBORHOOD CAD FEED</div>
+                <div class="panel-content" id="crime-feed"></div>
+            </div>
+
+            <!-- RIGHT MIDDLE - CIA LEAKS -->
+            <div class="panel" style="grid-column: 3; grid-row: 2;">
+                <div class="panel-title">CIA.GOV LEAK FEED // TOP SECRET</div>
+                <div class="panel-content" id="cia-feed"></div>
+            </div>
+
+            <!-- RIGHT BOTTOM - LOGS -->
+            <div class="panel" style="grid-column: 3; grid-row: 3;">
+                <div class="panel-title">SERVER SYSTEM LOGS</div>
+                <div class="panel-content" id="log-feed"></div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div>[CLASSIFIED // DEEP_ACCESS] NODE_01 // Omaha, NE // LAT 41.2565, LON -95.9345</div>
+            <div id="footer-time">TIME: 00:00:00</div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURATION - R510 PRODUCTION
+        const CONFIG = {
+            // Crime/CAD API
+            CRIME_API_KEY: '', // Will load from environment variable
+            OMAHA_LAT: 41.2565,
+            OMAHA_LON: -95.9345,
+            CRIME_RADIUS: 0.05,
+
+            // Flightradar24 & ADS-B
+            FR24_ENABLED: true,
+            FR24_MCP_ENDPOINT: 'http://localhost:8000/fr24',
+            DUMP1090_ENABLED: true,
+            DUMP1090_ENDPOINT: 'http://192.168.0.169:8080/data/aircraft.json',
+
+            // SDR & Broadcastify
+            SDR_HARDWARE_CONNECTED: true,
+            BROADCASTIFY_STATUS: 'PENDING_APPROVAL',
+            BROADCASTIFY_ENDPOINT: 'ws://localhost:8080/broadcastify',
+
+            // Map Settings
+            MAP_CENTER_LAT: 41.2565,
+            MAP_CENTER_LON: -95.9345,
+            MAP_LAT_RANGE: 4,
+            MAP_LON_RANGE: 4,
+
+            // Update Intervals
+            UPDATE_INTERVAL: 30000, // 30 seconds for crime
+            FLIGHT_UPDATE_INTERVAL: 3000, // 3 seconds for flights
+            TELEMETRY_UPDATE_INTERVAL: 2000 // 2 seconds
+        };
+
+        // STATE
+        const state = {
+            crimeIncidents: [],
+            flights: [],
+            bcfyCalls: [],
+            useCrimeAPI: false
+        };
+
+        // ====== METRIC GRAPH ======
+        function drawMetricGraph() {
+            const canvas = document.getElementById('metric-graph');
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0d0518';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Grid
+            ctx.strokeStyle = '#5B21B6';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 15) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Loss curve
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            for (let x = 0; x < canvas.width; x += 2) {
+                const t = x / canvas.width;
+                const y = canvas.height * 0.9 - (Math.exp(-t * 3) * canvas.height * 0.6);
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '7px monospace';
+            ctx.fillText('LOSS', 5, 10);
+            ctx.fillText('5.0', 5, 20);
+            ctx.fillText('0.0', 5, canvas.height - 5);
+            ctx.fillText('EPOCH →', canvas.width - 40, canvas.height - 5);
+        }
+
+        // ====== CRIME DATA ======
+        async function fetchCrimeData() {
+            if (CONFIG.CRIME_API_KEY) {
+                try {
+                    const url = `https://api.spotcrime.com/crimes.json?lat=${CONFIG.OMAHA_LAT}&lon=${CONFIG.OMAHA_LON}&radius=${CONFIG.CRIME_RADIUS}&key=${CONFIG.CRIME_API_KEY}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    state.crimeIncidents = data.crimes || [];
+                    state.useCrimeAPI = true;
+                    document.getElementById('crime-api-status').classList.remove('offline');
+                } catch (error) {
+                    console.error('Crime API error:', error);
+                    generateSimulatedCrimeData();
+                    document.getElementById('crime-api-status').classList.add('offline');
+                }
+            } else {
+                generateSimulatedCrimeData();
+                document.getElementById('crime-api-status').classList.add('offline');
+            }
+
+            updateCrimeFeed();
+        }
+
+        function generateSimulatedCrimeData() {
+            const types = [
+                { type: 'SHOTS FIRED', severity: 'CRITICAL' },
+                { type: 'ARMED ROBBERY', severity: 'CRITICAL' },
+                { type: 'ASSAULT', severity: 'HIGH' },
+                { type: 'BURGLARY', severity: 'HIGH' },
+                { type: 'VEHICLE THEFT', severity: 'MEDIUM' },
+                { type: 'VANDALISM', severity: 'MEDIUM' },
+                { type: 'THEFT', severity: 'LOW' }
+            ];
+
+            const streets = ['24th & L St', 'Dodge & 72nd', '132nd & Maple', 'Pacific St', 'Center St', 'Q St', '84th Ave'];
+
+            state.crimeIncidents = [];
+            for (let i = 0; i < 12; i++) {
+                const incident = types[Math.floor(Math.random() * types.length)];
+                const latOffset = (Math.random() - 0.5) * 0.1;
+                const lonOffset = (Math.random() - 0.5) * 0.1;
+
+                state.crimeIncidents.push({
+                    incident_type: incident.type,
+                    severity: incident.severity,
+                    timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+                    location: streets[Math.floor(Math.random() * streets.length)],
+                    lat: CONFIG.OMAHA_LAT + latOffset,
+                    lon: CONFIG.OMAHA_LON + lonOffset
+                });
+            }
+        }
+
+        function updateCrimeFeed() {
+            const container = document.getElementById('crime-feed');
+            container.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.className = 'data-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>TIME</th>
+                        <th>INCIDENT</th>
+                        <th>LOCATION</th>
+                        <th>SEV</th>
+                    </tr>
+                </thead>
+                <tbody id="crime-tbody"></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            state.crimeIncidents.slice(0, 20).forEach(crime => {
+                const row = document.createElement('tr');
+                if (crime.severity === 'CRITICAL') {
+                    row.className = 'crime-row-critical';
+                }
+
+                const time = new Date(crime.timestamp).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+
+                let typeClass = 'crime-type-medium';
+                if (crime.severity === 'CRITICAL') typeClass = 'crime-type-critical';
+                else if (crime.severity === 'HIGH') typeClass = 'crime-type-high';
+
+                row.innerHTML = `
+                    <td>${time}</td>
+                    <td class="${typeClass}">${crime.incident_type}</td>
+                    <td style="font-size: 7px;">${crime.location}</td>
+                    <td style="font-size: 7px;">${crime.severity[0]}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            container.appendChild(table);
+        }
+
+        // ====== BROADCASTIFY ======
+        function generateBroadcastifyData() {
+            const talkgroups = ['OPD SE DISP', 'OPD NORTH', 'FIRE DISP', 'EMS DISP'];
+            const frequencies = ['857.4375', '856.2125', '858.7875', '859.1125'];
+            const transcripts = [
+                'Unit 402 responding to 10-33...',
+                '10-4, unit en route to call',
+                'Requesting backup at location',
+                'Code 4, situation resolved',
+                'Traffic stop at 72nd & Dodge',
+                '10-23, arrived on scene',
+                'Requesting EMS to location'
+            ];
+
+            state.bcfyCalls = [];
+            for (let i = 0; i < 8; i++) {
+                state.bcfyCalls.push({
+                    timestamp: new Date(Date.now() - Math.random() * 600000).toISOString(),
+                    talkgroup: talkgroups[Math.floor(Math.random() * talkgroups.length)],
+                    frequency: frequencies[Math.floor(Math.random() * frequencies.length)],
+                    unit: Math.floor(Math.random() * 900) + 100,
+                    duration: Math.floor(Math.random() * 30) + 5,
+                    transcript: transcripts[Math.floor(Math.random() * transcripts.length)]
+                });
+            }
+
+            updateBroadcastifyFeed();
+        }
+
+        function updateBroadcastifyFeed() {
+            const container = document.getElementById('bcfy-feed');
+            container.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.className = 'data-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>TIME</th>
+                        <th>TALKGROUP</th>
+                        <th>FREQ (MHz)</th>
+                        <th>UNIT</th>
+                        <th>DUR</th>
+                        <th>TRANSCRIPT</th>
+                    </tr>
+                </thead>
+                <tbody id="bcfy-tbody"></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            state.bcfyCalls.forEach(call => {
+                const time = new Date(call.timestamp).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${time}</td>
+                    <td style="color: #06b6d4;">${call.talkgroup}</td>
+                    <td>${call.frequency}</td>
+                    <td>${call.unit}</td>
+                    <td>${call.duration}s</td>
+                    <td style="font-size: 7px;">"${call.transcript}"</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            container.appendChild(table);
+        }
+
+        // ====== CIA LEAKS ======
+        function generateCIALeaks() {
+            const container = document.getElementById('cia-feed');
+
+            const docs = [
+                {
+                    id: 'DOC-00928',
+                    topic: 'COLD WAR',
+                    extract: 'Asset <span class="redacted">BLACKBIRD</span> infiltrated Soviet network. Status: <span class="redacted">ACTIVE</span>.'
+                },
+                {
+                    id: 'DOC-01242',
+                    topic: 'SIGNALS',
+                    extract: 'Intercept on channel <span class="redacted">DELTA-7</span> confirmed. Technical surveillance operational.'
+                },
+                {
+                    id: 'DOC-00445',
+                    topic: 'ORBITAL',
+                    extract: 'Debris field expanding. Threat to <span class="redacted">CLASSIFIED</span> satellite assets imminent.'
+                }
+            ];
+
+            const table = document.createElement('table');
+            table.className = 'data-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>DOC ID</th>
+                        <th>TOPIC</th>
+                        <th>EXTRACT</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            docs.forEach(doc => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="color: #4ADE80;">${doc.id}</td>
+                    <td>${doc.topic}</td>
+                    <td style="font-size: 7px;">${doc.extract}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            container.appendChild(table);
+        }
+
+        // ====== LOGS ======
+        function generateLog() {
+            const container = document.getElementById('log-feed');
+            const levels = ['INFO', 'WARN', 'ERROR'];
+            const messages = [
+                'Ollama service healthy',
+                'Crime API ingest 200 OK',
+                'Tailscale connection established',
+                'Kernel update applied',
+                'Neural network sync completed',
+                'Database checkpoint created',
+                'Broadcastify stream active'
+            ];
+
+            setInterval(() => {
+                const now = new Date();
+                const timestamp = now.toISOString().substring(11, 23);
+                const level = levels[Math.floor(Math.random() * levels.length)];
+                const message = messages[Math.floor(Math.random() * messages.length)];
+
+                const logLine = document.createElement('div');
+                logLine.className = 'log-line';
+                logLine.innerHTML = `<span class="log-time">[${timestamp}]</span> <span class="log-level">${level}</span>: ${message}`;
+
+                container.insertBefore(logLine, container.firstChild);
+
+                while (container.children.length > 50) {
+                    container.removeChild(container.lastChild);
+                }
+            }, 2000);
+        }
+
+        // ====== FLIGHT DATA ======
+        function generateFlightData() {
+            const airlines = ['SWA', 'UAL', 'DAL', 'AAL', 'ASA'];
+
+            state.flights = [];
+            for (let i = 0; i < 40; i++) {
+                const airline = airlines[Math.floor(Math.random() * airlines.length)];
+                const flightNum = Math.floor(Math.random() * 9000) + 100;
+                const latOffset = (Math.random() - 0.5) * 2;
+                const lonOffset = (Math.random() - 0.5) * 2;
+
+                state.flights.push({
+                    id: `${airline}${flightNum}`,
+                    lat: CONFIG.MAP_CENTER_LAT + latOffset,
+                    lon: CONFIG.MAP_CENTER_LON + lonOffset,
+                    alt: Math.floor(Math.random() * 35000) + 5000,
+                    speed: Math.floor(Math.random() * 200) + 300,
+                    track: Math.floor(Math.random() * 360)
+                });
+            }
+        }
+
+        // ====== MAP ======
+        function initMap() {
+            const canvas = document.getElementById('map-canvas');
+            const ctx = canvas.getContext('2d');
+
+            const latRange = 4;
+            const lonRange = 4;
+
+            function resize() {
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+            }
+
+            resize();
+            window.addEventListener('resize', resize);
+
+            function latLonToXY(lat, lon) {
+                const x = ((lon - (CONFIG.MAP_CENTER_LON - lonRange / 2)) / lonRange) * canvas.width;
+                const y = canvas.height - ((lat - (CONFIG.MAP_CENTER_LAT - latRange / 2)) / latRange) * canvas.height;
+                return {x, y};
+            }
+
+            function drawMap() {
+                ctx.fillStyle = '#040406';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Grid
+                ctx.strokeStyle = 'rgba(91, 33, 182, 0.3)';
+                ctx.lineWidth = 0.5;
+                const gridSize = 30;
+                for (let x = 0; x < canvas.width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < canvas.height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+
+                // Center crosshair
+                const center = latLonToXY(CONFIG.MAP_CENTER_LAT, CONFIG.MAP_CENTER_LON);
+                ctx.strokeStyle = '#A855F7';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(center.x - 8, center.y);
+                ctx.lineTo(center.x + 8, center.y);
+                ctx.moveTo(center.x, center.y - 8);
+                ctx.lineTo(center.x, center.y + 8);
+                ctx.stroke();
+
+                // Draw flights
+                state.flights.forEach((flight, i) => {
+                    const pos = latLonToXY(flight.lat, flight.lon);
+
+                    if (pos.x < -50 || pos.x > canvas.width + 50 || pos.y < -50 || pos.y > canvas.height + 50) {
+                        return;
+                    }
+
+                    // Trail
+                    const trackRad = (flight.track * Math.PI) / 180;
+                    const trailLength = 20;
+                    const trailX = pos.x - Math.sin(trackRad) * trailLength;
+                    const trailY = pos.y + Math.cos(trackRad) * trailLength;
+
+                    ctx.strokeStyle = '#7c3aed';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(trailX, trailY);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+
+                    // Aircraft icon (X)
+                    ctx.strokeStyle = '#06b6d4';
+                    ctx.lineWidth = 2;
+                    const size = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x - size, pos.y - size);
+                    ctx.lineTo(pos.x + size, pos.y + size);
+                    ctx.moveTo(pos.x + size, pos.y - size);
+                    ctx.lineTo(pos.x - size, pos.y + size);
+                    ctx.stroke();
+
+                    // Labels (every 6th)
+                    if (i % 6 === 0) {
+                        ctx.fillStyle = '#e5e7eb';
+                        ctx.font = '7px monospace';
+                        ctx.fillText(flight.id, pos.x + 6, pos.y - 2);
+                        ctx.fillText(`${flight.speed}kt`, pos.x + 6, pos.y + 6);
+                    }
+                });
+
+                // Draw crime incidents
+                state.crimeIncidents.forEach((crime, i) => {
+                    const pos = latLonToXY(crime.lat, crime.lon);
+
+                    if (pos.x < 0 || pos.x > canvas.width || pos.y < 0 || pos.y > canvas.height) {
+                        return;
+                    }
+
+                    // Pulsing effect
+                    const pulse = Math.sin(Date.now() / 200 + i) * 0.5 + 0.5;
+
+                    // Outer glow
+                    ctx.strokeStyle = `rgba(239, 68, 68, ${pulse * 0.3})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 8 + pulse * 4, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Inner circle
+                    ctx.fillStyle = '#EF4444';
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Label (every 3rd)
+                    if (i % 3 === 0) {
+                        ctx.fillStyle = '#EF4444';
+                        ctx.font = '7px monospace';
+                        ctx.fillText(crime.incident_type, pos.x + 10, pos.y);
+                    }
+                });
+            }
+
+            setInterval(drawMap, 50);
+        }
+
+        // ====== TELEMETRY ======
+        function updateTelemetry() {
+            setInterval(() => {
+                const cpu = Math.floor(Math.random() * 40 + 30);
+                const mem = Math.floor(Math.random() * 30 + 60);
+                const net = (Math.random() * 2 + 0.5).toFixed(1);
+                const disk = Math.floor(Math.random() * 500 + 200);
+
+                document.getElementById('cpu-val').textContent = cpu + '%';
+                document.getElementById('cpu-bar').style.width = cpu + '%';
+
+                document.getElementById('mem-val').textContent = mem + '%';
+                document.getElementById('mem-bar').style.width = mem + '%';
+
+                document.getElementById('net-rx-val').textContent = net + 'MB/s';
+                document.getElementById('net-rx-bar').style.width = (parseFloat(net) * 20) + '%';
+
+                document.getElementById('disk-val').textContent = disk + 'KB/s';
+                document.getElementById('disk-bar').style.width = (disk / 10) + '%';
+            }, 2000);
+        }
+
+        // ====== TIME ======
+        function updateTime() {
+            const now = new Date();
+            const utcTime = now.toISOString().substring(11, 19) + ' UTC';
+            const localTime = 'TIME: ' + now.toTimeString().substring(0, 8);
+
+            document.getElementById('utc-time').textContent = utcTime;
+            document.getElementById('footer-time').textContent = localTime;
+        }
+
+        // ====== INITIALIZE ======
+        window.addEventListener('DOMContentLoaded', () => {
+            drawMetricGraph();
+            generateFlightData();
+            fetchCrimeData();
+            generateBroadcastifyData();
+            generateCIALeaks();
+            generateLog();
+            initMap();
+            updateTelemetry();
+            updateTime();
+
+            setInterval(updateTime, 1000);
+            setInterval(fetchCrimeData, CONFIG.UPDATE_INTERVAL);
+            setInterval(generateBroadcastifyData, 30000);
+        });
+    </script>
+</body>
+</html>

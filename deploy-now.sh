@@ -1,0 +1,18 @@
+#!/bin/bash
+echo "════════════════════════════════════════════════════════════"
+echo "  DEPLOYING TO R510 - 192.168.0.169"
+echo "════════════════════════════════════════════════════════════"
+echo ""
+echo "Copying files..."
+scp -r ~/r510-command-center/ matt@192.168.0.169:~/
+echo ""
+echo "✅ Files copied!"
+echo ""
+echo "Now SSH to R510 and run:"
+echo "  ssh matt@192.168.0.169"
+echo "  cd ~/r510-command-center"
+echo "  sudo ./r510-deploy-all.sh"
+echo ""
+echo "Answer 'n' to all prompts (you already have dump1090)"
+echo ""
+echo "Dashboard will be at: http://192.168.0.169:8421"

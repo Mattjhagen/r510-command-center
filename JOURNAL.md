@@ -6,7 +6,7 @@
 - **Shaggoth APP** — self-hosted AI running on AWS EC2 t3.small (us-east-2)
 - **iOS + Android app** in the App Store with Add Knowledge, Learn, Memory tabs
 - **AWS EC2 migration** from Dell R510 homelab to cloud
-- **Cloudflare Tunnel** routing `ai.relayapp.pro` → EC2 port 8420
+- **Cloudflare Tunnel** routing `ai.relayapp.pro` → EC2 port 8421
 - **Autonomous learning** — curiosity scheduler researches topics every 15 min
 - **TinyGPT model** trained on 39k words, deployed on EC2
 - **Session tracking** — `/sessions` endpoint tracks active users by platform
@@ -21,7 +21,7 @@ ai.relayapp.pro (Cloudflare Tunnel)
       │
       ▼
 AWS EC2 t3.small (us-east-2)
-  shaggoth.service  — Python API server :8420
+  shaggoth.service  — Python API server :8421
   cloudflared.service — Cloudflare tunnel
       │
       ▼
@@ -498,10 +498,10 @@ cat ~/AI/VASTAI_SETUP.md
 # Test integration
 cd ~/Shaggoth-a1
 bash ADD_DEEPSEEK_ENDPOINTS.sh
-python3 -m shaggoth serve --port 8420
+python3 -m shaggoth serve --port 8421
 
 # Quick test
-curl -X POST http://localhost:8420/deepseek/chat \
+curl -X POST http://localhost:8421/deepseek/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "test"}'
 ```

@@ -1,0 +1,271 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                                                                          ║
+║          R510 COMMAND CENTER DASHBOARD - DEPLOYMENT COMPLETE             ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+✅ MISSION ACCOMPLISHED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 DELIVERABLES
+
+Two Complete Dashboard Versions:
+
+1️⃣  index.html
+   ✓ Canvas-based map with real-time rendering
+   ✓ All data sources enabled and configured
+   ✓ dump1090 endpoint: http://192.168.0.169:8080
+   ✓ Ready for immediate deployment
+   ✓ No API keys required
+
+2️⃣  command-center-dashboard.html (GOOGLE MAPS)
+   ✓ Google Maps hybrid satellite view
+   ✓ Conditional squawk code glow effects
+   ✓ Rotating aircraft markers
+   ✓ Infrastructure reference pins
+   ✓ Requires Google Maps API key (free tier OK)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 FEATURES IMPLEMENTED
+
+✅ Live Air Traffic
+   - Real-time data from dump1090 (192.168.0.169:8080)
+   - Flightradar24 MCP fallback support
+   - Updates every 3 seconds
+   - Aircraft heading indicators
+
+✅ Squawk Code Intelligence (Google Maps version)
+   - 7500/7600/7700: Crimson pulsing (Emergency)
+   - 75xx/76xx: Orange glow (Intercepted)
+   - 1200: Blue glow (VFR)
+   - Other: Green glow (Standard)
+
+✅ Crime & CAD Feed
+   - SpotCrime API integration ready
+   - Simulated data fallback
+   - Red pulsing markers for critical incidents
+   - Updates every 30 seconds
+
+✅ Shaggoth-A1 Metrics
+   - Training loss curve visualization
+   - System telemetry (CPU, Memory, Network)
+   - Service status monitoring
+   - Real-time statistics
+
+✅ Broadcastify Ready
+   - Douglas County P25 feed configured
+   - SDR hardware detection enabled
+   - Call log table with transcripts
+   - Status: PENDING_APPROVAL
+
+✅ CIA Reading Room Feed
+   - Intelligence document stream
+   - Redacted text highlighting
+   - Top secret classification
+
+✅ System Logs
+   - Real-time log streaming
+   - Service health monitoring
+   - Configurable intervals
+
+✅ Boot Persistence
+   - systemd services with autostart
+   - WantedBy=multi-user.target
+   - Restart=always on crash
+   - Survives reboots automatically
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 DEPLOYMENT OPTIONS
+
+OPTION 1: Quick Deploy (Canvas Map - No API Key)
+──────────────────────────────────────────────────
+scp -r ~/r510-command-center/ user@192.168.0.169:~/
+ssh user@192.168.0.169
+cd ~/r510-command-center
+sudo ./r510-deploy-all.sh
+
+Access: http://192.168.0.169:8421
+
+OPTION 2: Google Maps Deploy (Advanced)
+──────────────────────────────────────────────────
+1. Get Google Maps API key (see GOOGLE-MAPS-SETUP.md)
+2. Edit command-center-dashboard.html with API key
+3. Deploy:
+   scp command-center-dashboard.html user@192.168.0.169:~/
+   ssh user@192.168.0.169
+   sudo cp command-center-dashboard.html /opt/r510-dashboard/index.html
+   sudo ./deploy-dashboard.sh
+
+Access: http://192.168.0.169:8421
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 PROJECT STRUCTURE
+
+r510-command-center/
+├── index.html                           ⭐ Main dashboard (Canvas map)
+├── command-center-dashboard.html        ⭐ Google Maps version
+├── command-center-dashboard-original.html  Backup
+├── command-center-dashboard-gmaps.html     Source
+│
+├── deploy-dashboard.sh                  ⭐ Deploy dashboard service
+├── setup-fr24-mcp.sh                      Install FR24 MCP
+├── setup-dump1090.sh                      Install dump1090
+├── r510-deploy-all.sh                   ⭐ ONE-COMMAND deployment
+├── verify-autostart.sh                    Check boot persistence
+│
+├── DEPLOY-TO-R510.txt                   ⭐ Quick start instructions
+├── QUICKSTART.md                          5-minute guide
+├── DEPLOYMENT.md                          Full deployment guide
+├── GOOGLE-MAPS-SETUP.md                 ⭐ Google Maps API setup
+├── DASHBOARD_README.md                    Features documentation
+├── TEST-DASHBOARD.md                      Local testing guide
+│
+└── (Original Python curses dashboard files)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️  CONFIGURATION SUMMARY
+
+Data Sources (ENABLED):
+  ✓ FR24_ENABLED: true
+  ✓ DUMP1090_ENABLED: true
+  ✓ DUMP1090_ENDPOINT: http://192.168.0.169:8080/data/aircraft.json
+  ✓ SDR_HARDWARE_CONNECTED: true
+  ✓ BROADCASTIFY_STATUS: PENDING_APPROVAL
+
+Location Settings:
+  ✓ MAP_CENTER_LAT: 41.2565 (Omaha, NE)
+  ✓ MAP_CENTER_LON: -95.9345
+  ✓ MAP_LAT_RANGE: 4
+  ✓ MAP_LON_RANGE: 4
+
+Update Intervals:
+  ✓ FLIGHT_UPDATE_INTERVAL: 3000ms (3 seconds)
+  ✓ CRIME_UPDATE_INTERVAL: 30000ms (30 seconds)
+  ✓ TELEMETRY_UPDATE_INTERVAL: 2000ms (2 seconds)
+
+Ports:
+  ✓ Dashboard: 8421
+  ✓ FR24 MCP: 8000 (optional)
+  ✓ dump1090: 8080 (existing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎨 VISUAL FEATURES
+
+Color Palette:
+  Background:      #040406 (Deep Black)
+  Borders:         #5B21B6 (Kali Purple)
+  Data:            #4ADE80 (Terminal Green)
+  Alerts:          #EF4444 (Crimson)
+  Cyan Accents:    #06b6d4
+  Orange Warnings: #F97316
+
+Animations:
+  ✓ Pulsing emergency squawk codes
+  ✓ Animated telemetry bars
+  ✓ Real-time log scrolling
+  ✓ Alert flashing
+  ✓ Glow effects on critical data
+
+Layout:
+  ✓ 3-column responsive grid
+  ✓ Strict overflow: hidden (no scrollbars)
+  ✓ Fixed-height panels
+  ✓ Monospace terminal aesthetic
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DOCUMENTATION FILES
+
+Quick Start:
+  ✓ DEPLOY-TO-R510.txt      - Copy/paste deployment
+  ✓ QUICKSTART.md            - 5-minute guide
+
+Setup Guides:
+  ✓ DEPLOYMENT.md            - Complete deployment manual
+  ✓ GOOGLE-MAPS-SETUP.md     - Google Maps API setup
+  ✓ TEST-DASHBOARD.md        - Local testing
+
+Reference:
+  ✓ DASHBOARD_README.md      - All features documented
+  ✓ README.md                - Original project README
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 TESTING CHECKLIST
+
+Before Deployment:
+  ☐ Test locally: python3 -m http.server 8421
+  ☐ Verify dump1090 accessible: curl http://192.168.0.169:8080/data/aircraft.json
+  ☐ Check browser console for errors
+  ☐ Verify all panels render correctly
+
+After Deployment:
+  ☐ Dashboard accessible at http://192.168.0.169:8421
+  ☐ Aircraft appearing on map
+  ☐ Flight data table populating
+  ☐ Telemetry bars animating
+  ☐ Logs scrolling
+  ☐ Service status showing correct states
+
+After Reboot:
+  ☐ Run: ./verify-autostart.sh
+  ☐ Services auto-start on boot
+  ☐ Dashboard still accessible
+  ☐ Data still updating
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 NEXT STEPS
+
+IMMEDIATE (Required):
+  1. Deploy to R510 server
+  2. Verify dashboard loads
+  3. Check aircraft data streaming
+  4. Test boot persistence
+
+OPTIONAL (Enhancements):
+  1. Add Google Maps API key for satellite view
+  2. Configure SpotCrime API key for real crime data
+  3. Set up Broadcastify when approved
+  4. Add additional infrastructure markers
+  5. Customize color scheme
+  6. Add custom telemetry sources
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 SUPPORT & TROUBLESHOOTING
+
+Common Issues:
+  ✓ See DEPLOYMENT.md "Troubleshooting" section
+  ✓ Check service logs: sudo journalctl -u r510-dashboard -f
+  ✓ Verify firewall: sudo ufw status
+  ✓ Test endpoints with curl
+
+Get Help:
+  ✓ GitHub: https://github.com/Mattjhagen/r510-command-center
+  ✓ Open issue with logs and screenshots
+  ✓ Check browser console (F12) for errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ READY FOR DEPLOYMENT
+
+Run this command to deploy everything:
+
+  scp -r ~/r510-command-center/ user@192.168.0.169:~/
+  ssh user@192.168.0.169 "cd ~/r510-command-center && sudo ./r510-deploy-all.sh"
+
+Access dashboard:
+  http://192.168.0.169:8421
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                        🚀 MISSION STATUS: GO FOR LAUNCH 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

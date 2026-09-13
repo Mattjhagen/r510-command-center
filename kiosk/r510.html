@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#06060a">
+<title>Shaggoth — R510</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#06060a;--bg:#09090f;--surf:#0d0d18;--panel:#111120;--raised:#171728;
+  --bdr:#1e1e32;--bdr2:#2a2a44;
+  --violet:#7c3aed;--vi-lt:#a78bfa;--vi-gl:rgba(124,58,237,.08);
+  --text:#e2d9ff;--sub:#8888aa;--muted:#4a4a6a;--dim:#2a2a44;
+  --green:#10b981;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4;
+  --mono:'JetBrains Mono','Courier New',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--void);color:var(--text);font-family:var(--mono);font-size:11px;-webkit-font-smoothing:antialiased}
+
+/* FULL VIEWPORT SHELL */
+#shell{display:grid;grid-template-rows:auto 1fr auto;height:100vh;padding:6px;gap:5px}
+
+/* ── HEADER ── */
+#hdr{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;position:relative;overflow:hidden}
+#hdr::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(124,58,237,.04),transparent);animation:sw 6s ease-in-out infinite;pointer-events:none}
+@keyframes sw{0%,100%{transform:translateX(-100%)}50%{transform:translateX(100%)}}
+.hlogo{color:var(--violet);font-size:14px;font-weight:700;text-shadow:0 0 10px rgba(124,58,237,.6);letter-spacing:.05em}
+.hsep{color:var(--dim);margin:0 4px}
+.hnode{color:var(--sub);font-size:10px;letter-spacing:.06em}
+.hsp{flex:1}
+.hbtn{padding:4px 11px;font-size:10px;font-weight:700;letter-spacing:.06em;border:1px solid;cursor:pointer;border-radius:4px;transition:all .15s;text-transform:uppercase;background:transparent;font-family:var(--mono)}
+.hbtn-g{border-color:rgba(16,185,129,.4);color:var(--green)}.hbtn-g:hover{background:rgba(16,185,129,.1)}
+.hbtn-v{border-color:rgba(124,58,237,.4);color:var(--vi-lt)}.hbtn-v:hover{background:var(--vi-gl)}
+.hbtn-c{border-color:rgba(6,182,212,.3);color:var(--cyan)}.hbtn-c:hover{background:rgba(6,182,212,.07)}
+.hbtns{display:flex;gap:5px}
+#cpill{display:flex;align-items:center;gap:5px;padding:3px 10px;border:1px solid var(--bdr2);border-radius:14px;font-size:10px;color:var(--muted);margin-left:8px}
+#cdot{width:5px;height:5px;border-radius:50%;background:var(--red);flex-shrink:0;transition:all .4s}
+#cdot.live{background:var(--green);box-shadow:0 0 6px rgba(16,185,129,.7)}
+#cdot.wait{background:var(--amber);animation:bl .7s infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.2}}
+#htime{color:var(--cyan);font-size:10px;margin-left:8px;letter-spacing:.04em}
+
+/* ── MAIN ── */
+#main{display:grid;grid-template-columns:1fr 220px;gap:5px;min-height:0;overflow:hidden}
+
+/* LEFT: ORBITAL + BOTTOM PANELS */
+#left{display:grid;grid-template-rows:1fr auto;gap:5px;min-height:0}
+
+/* ORBITAL */
+#orbital{border:1px solid var(--bdr);background:var(--bg);border-radius:5px;position:relative;overflow:hidden;min-height:0}
+#cv{width:100%;height:100%;display:block}
+
+/* LEFT BOTTOM: 3 small panels side by side */
+#left-bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+
+/* RIGHT: stacked panels */
+#right{display:grid;grid-template-rows:auto auto auto auto 1fr;gap:5px;overflow:hidden}
+
+/* PANEL */
+.p{background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:8px 10px;overflow:hidden;position:relative}
+.p::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--violet),transparent);opacity:.25}
+.plbl{font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.plbl::before{content:'◆';font-size:6px;color:var(--violet)}
+
+/* SERVICE ROWS */
+.sr{display:flex;align-items:center;padding:3px 0;border-bottom:1px solid rgba(30,30,50,.8);gap:6px}
+.sr:last-child{border:none}
+.sdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sdot.g{background:var(--green);box-shadow:0 0 5px rgba(16,185,129,.6)}
+.sdot.r{background:var(--red)}.sdot.a{background:var(--amber)}.sdot.d{background:var(--muted)}
+.sdot.v{background:var(--violet);box-shadow:0 0 5px rgba(124,58,237,.7);animation:vp .9s infinite}
+@keyframes vp{0%,100%{box-shadow:0 0 3px rgba(124,58,237,.4)}50%{box-shadow:0 0 8px rgba(124,58,237,.9)}}
+.sname{flex:1;color:var(--sub);font-size:10px}
+.sval{font-size:10px;font-weight:600}
+.sval.g{color:var(--green)}.sval.r{color:var(--red)}.sval.a{color:var(--amber)}.sval.v{color:var(--vi-lt)}.sval.c{color:var(--cyan)}
+
+/* METRIC BAR */
+.mb{margin:3px 0 5px}
+.mb-top{display:flex;justify-content:space-between;margin-bottom:3px;font-size:10px}
+.mb-label{color:var(--muted)}.mb-val{color:var(--text);font-weight:600}
+.mbar{height:3px;background:var(--raised);border-radius:2px;overflow:hidden}
+.mfill{height:100%;border-radius:2px;background:var(--violet);transition:width 1.2s ease}
+.mfill.med{background:var(--green)}.mfill.warn{background:var(--amber)}.mfill.crit{background:var(--red)}
+
+/* PROC TABLE */
+.pt{width:100%;border-collapse:collapse;font-size:9px}
+.pt th{color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.05em;padding:2px 3px;text-align:left;border-bottom:1px solid var(--bdr)}
+.pt td{padding:3px 3px;border-bottom:1px solid rgba(30,30,50,.6)}
+.pt tr:hover td{background:var(--vi-gl)}
+.pn{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+
+/* LOG */
+#logbox{overflow:hidden;display:flex;flex-direction:column;gap:0;flex:1}
+.ll{display:flex;gap:5px;padding:2px 0;border-bottom:1px solid rgba(30,30,50,.4);animation:li .15s ease;flex-shrink:0}
+@keyframes li{from{opacity:0}to{opacity:1}}
+.lt{color:var(--dim);flex-shrink:0;font-size:9px}.ls{color:var(--violet);flex-shrink:0;min-width:55px;font-size:9px}.lm{color:var(--muted);font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lm.ok{color:var(--green)}.lm.warn{color:var(--amber)}.lm.err{color:var(--red)}.lm.info{color:var(--cyan)}
+
+
+/* TRAINING OVERLAY */
+#training-overlay{position:absolute;bottom:8px;left:8px;right:8px;max-height:220px;overflow:hidden;pointer-events:none;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.train-col{display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.train-line{font-size:9px;padding:3px 6px;background:rgba(6,6,10,.75);border-left:2px solid var(--cyan);border-radius:3px;animation:tfade 8s ease-out forwards;backdrop-filter:blur(2px)}
+@keyframes tfade{0%{opacity:1}70%{opacity:1}100%{opacity:0.1}}
+.train-step{color:var(--cyan);font-weight:600}
+.train-loss{color:var(--violet)}
+.train-quality{font-size:8px;padding:1px 4px;border-radius:2px;margin-left:4px}
+.train-quality.excellent{background:rgba(16,185,129,.2);color:var(--green)}
+.train-quality.good{background:rgba(16,185,129,.15);color:var(--green)}
+.train-quality.learning{background:rgba(6,182,212,.15);color:var(--cyan)}
+.train-chat{font-size:9px;padding:4px 7px;background:rgba(124,58,237,.12);border-left:2px solid var(--violet);border-radius:3px;animation:tfade 12s ease-out forwards;backdrop-filter:blur(2px);color:var(--vi-lt)}
+.train-chat strong{color:var(--text)}
+.train-quality.early{background:rgba(245,158,11,.15);color:var(--amber)}
+
+/* ASCII ART small */
+#ascii-wrap{text-align:center;padding:4px 0}
+pre#ascii{color:var(--violet);font-size:7px;line-height:1.2;display:inline-block;text-shadow:0 0 6px rgba(124,58,237,.5);animation:breathe 4s ease-in-out infinite}
+@keyframes breathe{0%,100%{text-shadow:0 0 6px rgba(124,58,237,.4),0 0 14px rgba(124,58,237,.15)}50%{text-shadow:0 0 12px rgba(124,58,237,.9),0 0 28px rgba(124,58,237,.4)}}
+
+/* ── BOTTOM STRIP ── */
+#strip{display:flex;gap:5px;flex-shrink:0}
+.sp{flex:1;background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:5px 8px;display:flex;align-items:center;gap:6px;min-width:0}
+.spi{font-size:11px;flex-shrink:0}
+.spl{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.spv{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* MODAL */
+#modal-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center}
+#modal-ov.open{display:flex}
+#modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;width:min(90vw,600px);max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+#modal-h{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bdr);gap:10px;flex-shrink:0}
+#modal-t{color:var(--vi-lt);font-size:12px;font-weight:700;letter-spacing:.04em;flex:1}
+#modal-x{width:24px;height:24px;border:1px solid var(--bdr2);background:transparent;color:var(--muted);cursor:pointer;border-radius:4px;font-family:var(--mono)}
+#modal-x:hover{color:var(--text);border-color:var(--violet)}
+#modal-b{overflow-y:auto;padding:14px 16px;flex:1;font-size:11px}
+.dr{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:11px}
+.dr:last-child{border:none}
+.dr-msg{flex:1;color:var(--sub)}
+.dr-fix{font-size:9px;padding:2px 8px;border:1px solid var(--violet);border-radius:3px;color:var(--vi-lt);cursor:pointer;background:transparent;font-family:var(--mono)}
+.dr-fix:hover{background:var(--vi-gl)}
+
+/* CHAT */
+#chat-fab{position:fixed;bottom:16px;right:16px;width:42px;height:42px;background:var(--violet);border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;box-shadow:0 4px 16px rgba(124,58,237,.5);z-index:100;display:flex;align-items:center;justify-content:center}
+#chat-fab:hover{background:var(--vi-dk,#6d28d9)}
+#chat-box{position:fixed;bottom:66px;right:16px;width:300px;z-index:100;background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5);display:none;flex-direction:column;height:320px}
+#chat-box.open{display:flex}
+#chat-hdr{padding:10px 14px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:7px;background:var(--panel);flex-shrink:0}
+.chat-dot{width:6px;height:6px;border-radius:50%;background:var(--violet);box-shadow:0 0 5px rgba(124,58,237,.7);animation:vp .9s infinite}
+.chat-title{font-size:11px;font-weight:700;color:var(--vi-lt);flex:1;letter-spacing:.04em}
+#chat-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px}
+#chat-msgs{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:5px}
+.cm{font-size:10px;line-height:1.6;padding:6px 9px;border-radius:6px;max-width:90%}
+.cm.u{align-self:flex-end;background:var(--vi-gl);border:1px solid rgba(124,58,237,.25);color:var(--vi-sf,#c4b5fd)}
+.cm.s{align-self:flex-start;background:var(--panel);border:1px solid var(--bdr2);color:var(--text)}
+.cm.sys{align-self:center;color:var(--muted);font-size:9px;background:none;border:none;padding:1px}
+.cm-from{font-size:8px;color:var(--muted);letter-spacing:.05em;margin-bottom:2px}
+#chat-in-row{display:flex;border-top:1px solid var(--bdr);background:var(--panel);flex-shrink:0}
+#chat-in{flex:1;background:transparent;border:none;outline:none;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:11px;caret-color:var(--vi-lt)}
+#chat-in::placeholder{color:var(--dim)}
+#chat-send{padding:0 10px;border:none;border-left:1px solid var(--bdr);background:transparent;color:var(--vi-lt);cursor:pointer}
+#chat-send:hover{background:var(--vi-gl)}
+</style>
+</head>
+<body>
+<div id="shell">
+
+<!-- HEADER -->
+<div id="hdr">
+  <span class="hlogo">⟁ SHAGGOTH</span>
+  <span class="hsep">/</span>
+  <span class="hnode">R510 · ORBITAL AI COMMAND CENTER · SELF-LEARNING</span>
+  <div class="hsp"></div>
+  <div class="hbtns">
+    <button class="hbtn hbtn-g" onclick="runDiag()">⚕ Diagnose</button>
+    <button class="hbtn hbtn-v" onclick="openModal('◎ Models',modelsHtml())">◎ Models</button>
+    <button class="hbtn hbtn-v" onclick="openModal('◇ Agents',agentsHtml())">◇ Agents</button>
+    <button class="hbtn hbtn-c" onclick="openModal('◈ Processes',procsHtml())">◈ Procs</button>
+  </div>
+  <div id="cpill"><div id="cdot"></div><span id="clbl">connecting</span></div>
+  <span id="htime">--:--:--</span>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT -->
+  <div id="left">
+
+    <!-- ORBITAL CANVAS -->
+    <div id="orbital"><canvas id="cv"></canvas>
+    <!-- Training Monitor Overlay -->
+    <div id="training-overlay">
+      <div class="train-col" id="train-steps"></div>
+      <div class="train-col" id="train-chat"></div>
+    </div></div>
+
+    <!-- LEFT BOTTOM: 3 panels -->
+    <div id="left-bottom">
+
+      <!-- AI SERVICES -->
+      <div class="p">
+        <div class="plbl">AI Services</div>
+        <div class="sr"><span class="sdot v" id="dot-ollama"></span><span class="sname">Ollama</span><span class="sval" id="s-ollama">Offline</span></div>
+        <div class="sr"><span class="sdot g"></span><span class="sname">Shaggoth</span><span class="sval g">Online</span></div>
+        <div class="sr"><span class="sdot v" id="dot-act"></span><span class="sname">AI Activity</span><span class="sval" id="s-act">Idle</span></div>
+        <div class="sr"><span class="sdot d"></span><span class="sname">OpenCode</span><span class="sval">Standby</span></div>
+        <div class="sr"><span class="sdot g"></span><span class="sname">Tunnel</span><span class="sval g">Live</span></div>
+      </div>
+
+      <!-- METRICS -->
+      <div class="p">
+        <div class="plbl">Telemetry</div>
+        <div class="mb">
+          <div class="mb-top"><span class="mb-label">CPU</span><span class="mb-val" id="v-cpu">0%</span></div>
+          <div class="mbar"><div class="mfill" id="b-cpu" style="width:0%"></div></div>
+        </div>
+        <div class="mb">
+          <div class="mb-top"><span class="mb-label">RAM</span><span class="mb-val" id="v-mem">0%</span></div>
+          <div class="mbar"><div class="mfill med" id="b-mem" style="width:0%"></div></div>
+        </div>
+        <div class="mb">
+          <div class="mb-top"><span class="mb-label">Disk</span><span class="mb-val" id="v-dsk">0%</span></div>
+          <div class="mbar"><div class="mfill med" id="b-dsk" style="width:0%"></div></div>
+        </div>
+        <div class="mb">
+          <div class="mb-top"><span class="mb-label">Swap</span><span class="mb-val" id="v-swp">0%</span></div>
+          <div class="mbar"><div class="mfill warn" id="b-swp" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- TOP PROCESSES -->
+      <div class="p">
+        <div class="plbl">Top Processes</div>
+        <table class="pt">
+          <thead><tr><th>Process</th><th style="text-align:right">CPU</th><th style="text-align:right">MEM</th></tr></thead>
+          <tbody id="proc-body"><tr><td colspan="3" style="color:var(--muted);padding:4px">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div id="right">
+
+    <!-- ASCII + GLOBAL STATUS -->
+    <div class="p" style="text-align:center;padding:6px 10px">
+      <div id="ascii-wrap">
+        <pre id="ascii">  .:oOo:.
+.oOOOOOOOo.
+oOOO@@@OOOOOo
+oOO@@@@@OOOoo
+oOOOO@@OOOOOo
+ `oOOOOOOo'
+   `:oOo:'</pre>
+      </div>
+      <div style="font-size:10px;font-weight:700;margin-top:4px" id="global-st">
+        <span style="color:var(--green)">● ALL SYSTEMS OPERATIONAL</span>
+      </div>
+    </div>
+
+    <!-- INFRASTRUCTURE -->
+    <div class="p">
+      <div class="plbl">Infrastructure</div>
+      <div class="sr"><span class="sname">Host</span><span class="sval v" id="v-host">r510</span></div>
+      <div class="sr"><span class="sname">Uptime</span><span class="sval g" id="v-up">—</span></div>
+      <div class="sr"><span class="sname">Temp</span><span class="sval" id="v-temp">—</span></div>
+      <div class="sr"><span class="sname">Load</span><span class="sval c" id="v-load">—</span></div>
+      <div class="sr"><span class="sname">Procs</span><span class="sval" id="v-procs">—</span></div>
+      <div class="sr"><span class="sname">Tailscale</span><span class="sval c" id="v-ts">—</span></div>
+    </div>
+
+    <!-- MODEL -->
+    <div class="p">
+      <div class="plbl">Active Model</div>
+      <div style="color:var(--vi-lt);font-size:11px;font-weight:700;margin-bottom:4px" id="v-model">—</div>
+      <div class="sr"><span class="sname">Ollama</span><span class="sval" id="v-ollama-st">Offline</span></div>
+      <div class="sr"><span class="sname">Conns</span><span class="sval c" id="v-conns">—</span></div>
+      <div class="sr"><span class="sname">Ports</span><span class="sval v" id="v-ports">—</span></div>
+    </div>
+
+    <!-- NETWORK -->
+    <div class="p">
+      <div class="plbl">Network</div>
+      <div id="net-rows"><div class="sr"><span class="sname" style="color:var(--muted)">Loading…</span></div></div>
+    </div>
+
+    <!-- LOG FEED -->
+    <div class="p" style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="plbl">Event Log</div>
+      <div id="logbox" style="flex:1;overflow:hidden;display:flex;flex-direction:column-reverse;gap:0"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BOTTOM STRIP -->
+<div id="strip">
+  <div class="sp"><span class="spi">🌡</span><div><div class="spl">Temp</div><div class="spv" id="p-tmp" style="color:var(--green)">—</div></div></div>
+  <div class="sp"><span class="spi">⏱</span><div><div class="spl">Uptime</div><div class="spv" id="p-up" style="color:var(--cyan)">—</div></div></div>
+  <div class="sp"><span class="spi">💾</span><div><div class="spl">RAM Free</div><div class="spv" id="p-mf" style="color:var(--cyan)">—</div></div></div>
+  <div class="sp"><span class="spi">💿</span><div><div class="spl">Disk Free</div><div class="spv" id="p-df" style="color:var(--amber)">—</div></div></div>
+  <div class="sp"><span class="spi">⚡</span><div><div class="spl">Ollama</div><div class="spv" id="p-ollama" style="color:var(--red)">OFFLINE</div></div></div>
+  <div class="sp"><span class="spi">🧠</span><div><div class="spl">Model</div><div class="spv" id="p-model" style="color:var(--violet)">—</div></div></div>
+  <div class="sp"><span class="spi">📡</span><div><div class="spl">Node</div><div class="spv" id="p-host" style="color:var(--blue,#4488ff)">r510</div></div></div>
+  <div class="sp"><span class="spi">🔄</span><div><div class="spl">Updated</div><div class="spv" id="p-tick" style="color:var(--muted)">—</div></div></div>
+</div>
+
+</div><!-- /shell -->
+
+<!-- CHAT FAB -->
+<button id="chat-fab" onclick="document.getElementById('chat-box').classList.toggle('open')" title="Talk to Shaggoth">🧠</button>
+<div id="chat-box">
+  <div id="chat-hdr">
+    <div class="chat-dot"></div>
+    <span class="chat-title">SHAGGOTH-A1</span>
+    <button id="chat-close" onclick="document.getElementById('chat-box').classList.remove('open')">✕</button>
+  </div>
+  <div id="chat-msgs">
+    <div class="cm sys">NEURAL LINK ESTABLISHED</div>
+    <div class="cm s"><div class="cm-from">SHAGGOTH-A1</div>Online. What do you need?</div>
+  </div>
+  <div id="chat-in-row">
+    <input id="chat-in" placeholder="talk to shaggoth…" onkeydown="if(event.key==='Enter')sendShag()">
+    <button id="chat-send" onclick="sendShag()">⏎</button>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-ov" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div id="modal-h"><span id="modal-t">—</span><button id="modal-x" onclick="closeModal()">✕</button></div>
+    <div id="modal-b"></div>
+  </div>
+</div>
+
+<script>
+const API=location.hostname==='r510.relayapp.pro'?'https://r510.relayapp.pro':`http://${location.hostname||'localhost'}:7072`;
+const SHAG=`http://${location.hostname||'localhost'}:8420`;
+let D={},ollamaOn=D.ollama_online;const loadedModel=D.ollama_model||""=[],loadedModel='';
+
+// CLOCK
+setInterval(()=>{document.getElementById('htime').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});},1000);
+
+// CONN
+function setConn(on){document.getElementById('cdot').className=on?'live':'wait';document.getElementById('clbl').textContent=on?'live':'offline';}
+
+// FETCH
+async function refresh(){
+  try{D=await fetch(API+'/api/tty').then(r=>r.json());setConn(true);render();}
+  catch{setConn(false);}
+  document.getElementById('p-tick').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}
+
+async function fetchOllama(){
+  try{
+    const t=await fetch('http://localhost:11434/api/tags',{signal:AbortSignal.timeout(2500)}).then(r=>r.json());
+    ollamaOn=D.ollama_online;const loadedModel=D.ollama_model||""=t.models||[];
+    setDot('dot-ollama','v');st('s-ollama','Active');stc('s-ollama','v');
+    st('v-ollama-st','Active');stc('v-ollama-st','v');
+    st('p-ollama','ONLINE');document.getElementById('p-ollama').style.color='var(--green)';
+    try{
+      const ps=await fetch('http://localhost:11434/api/ps',{signal:AbortSignal.timeout(2000)}).then(r=>r.json());
+      loadedModel=ps.models?.[0]?.name||models[0]?.name||'—';
+      st('v-model',loadedModel.split(':')[0]);st('p-model',loadedModel.split(':')[0]);
+    }catch{if(models[0]){loadedModel=models[0].name;st('v-model',loadedModel.split(':')[0]);}}
+  }catch{
+    ollamaOn=D.ollama_online;const loadedModel=D.ollama_model||""=[];loadedModel='';
+    setDot('dot-ollama','r');st('s-ollama','Offline');stc('s-ollama','r');
+    st('v-ollama-st','Offline');stc('v-ollama-st','r');
+    st('p-ollama','OFFLINE');document.getElementById('p-ollama').style.color='var(--red)';
+    st('v-model','—');st('p-model','—');
+  }
+}
+
+function render(){
+  const cpu=D.cpu||0,mp=D.mem_pct||0,dp=D.disk_pct||0,sp=D.swap_pct||0;
+
+  setBar('b-cpu','v-cpu',cpu,cpu.toFixed(0)+'%');
+  setBar('b-mem','v-mem',mp,Math.round(mp)+'%');
+  setBar('b-dsk','v-dsk',dp,Math.round(dp)+'%');
+  setBar('b-swp','v-swp',sp,Math.round(sp)+'%');
+
+  // Temp °F
+  if(D.temp){
+    const f=((D.temp*9/5)+32).toFixed(0);
+    const c=D.temp>80?'r':D.temp>65?'a':'g';
+    st('v-temp',f+'°F');stc('v-temp',c);
+    st('p-tmp',f+'°F');document.getElementById('p-tmp').style.color=D.temp>80?'var(--red)':D.temp>65?'var(--amber)':'var(--green)';
+  }
+
+  st('v-host',D.hostname||'r510');st('p-host',D.hostname||'r510');
+  st('v-up',D.uptime||'—');st('p-up',D.uptime||'—');
+  st('v-load',D.load_avg||'—');
+  st('v-procs',D.proc_count||'—');
+  st('v-ts',D.tailscale_ip||'—');
+  st('v-conns',D.connections!=null?String(D.connections):'—');
+  st('v-ports',D.listening_ports||'—');
+  st('p-mf',D.mem_free?D.mem_free+'GB':'—');
+  st('p-df',D.disk_free?D.disk_free+'GB':'—');
+
+  // AI activity
+  const act=cpu>40&&ollamaOn;
+  setDot('dot-act',act?'v':'d');
+  st('s-act',act?'Active':'Idle');stc('s-act',act?'v':'');
+
+  // Global status
+  const issues=(cpu>90?1:0)+(mp>90?1:0)+(!ollamaOn?1:0)+(D.temp>85?1:0);
+  document.getElementById('global-st').innerHTML=issues===0
+    ?'<span style="color:var(--green)">● ALL SYSTEMS OPERATIONAL</span>'
+    :`<span style="color:var(--amber)">⚠ ${issues} ISSUE${issues>1?'S':''}</span>`;
+
+  // Processes
+  if(D.procs){
+    document.getElementById('proc-body').innerHTML=D.procs.slice(0,6).map(p=>`<tr>
+      <td class="pn">${ex(p.name)}</td>
+      <td style="color:var(--amber);text-align:right">${(p.cpu||0).toFixed(1)}</td>
+      <td style="color:var(--cyan);text-align:right">${(p.mem||0).toFixed(1)}</td>
+    </tr>`).join('');
+  }
+
+  // Network
+  if(D.net){
+    document.getElementById('net-rows').innerHTML=Object.entries(D.net).slice(0,3).map(([i,n])=>`<div class="sr">
+      <span class="sdot g"></span>
+      <span class="sname">${ex(i)}</span>
+      <span class="sval" style="font-size:9px"><span style="color:var(--green)">↓${fmt(n.rx_sec||0)}/s</span> <span style="color:var(--amber)">↑${fmt(n.tx_sec||0)}/s</span></span>
+    </div>`).join('');
+  }
+}
+
+// ORBITAL
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+let frame=0,animPaused=false,satX=0,scanY=0;
+const pkts=[];
+
+function resize(){cv.width=cv.offsetWidth;cv.height=cv.offsetHeight;}
+resize();window.addEventListener('resize',resize);
+
+function draw(){
+  if(!animPaused)frame++;
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#06060a';ctx.fillRect(0,0,W,H);
+
+  // Stars
+  for(let i=0;i<100;i++){
+    const sx=((i*137+7)%W),sy=((i*191+13)%H);
+    const tw=Math.sin(frame*.04+i)*.5+.5;
+    ctx.fillStyle=`rgba(160,180,255,${.12+tw*.45})`;
+    ctx.fillRect(sx,sy,i%8===0?1.5:.7,i%8===0?1.5:.7);
+  }
+
+  // Satellite
+  if(!animPaused)satX=(satX+.25)%(W+60);
+  ctx.fillStyle='rgba(0,255,255,.5)';ctx.font='11px monospace';ctx.textAlign='left';
+  ctx.fillText('◈',satX-30,H*.07+Math.sin(frame*.012)*5);
+
+  // Earth
+  const ex2=W*.22,ey=H*.5,er=Math.min(H*.3,W*.18);
+  const eg=ctx.createRadialGradient(ex2,ey,er*.4,ex2,ey,er*2);
+  eg.addColorStop(0,'rgba(0,80,200,.18)');eg.addColorStop(1,'transparent');
+  ctx.fillStyle=eg;ctx.beginPath();ctx.arc(ex2,ey,er*2,0,Math.PI*2);ctx.fill();
+  const eb=ctx.createRadialGradient(ex2-er*.3,ey-er*.3,0,ex2,ey,er);
+  eb.addColorStop(0,'#1a5aaa');eb.addColorStop(.4,'#0a2a6a');eb.addColorStop(.7,'#1a7a2a');eb.addColorStop(1,'#0a1a4a');
+  ctx.fillStyle=eb;ctx.beginPath();ctx.arc(ex2,ey,er,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(80,160,255,.4)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(ex2,ey,er+3,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='rgba(0,200,255,.6)';ctx.font=`${Math.max(8,er*.18)}px JetBrains Mono`;ctx.textAlign='center';
+  ctx.fillText('EARTH',ex2,ey+3);
+  // Alien YOU
+  const a1p=Math.sin(frame*.06)*.3+.7;
+  ctx.fillStyle=`rgba(0,200,255,${a1p})`;ctx.font='16px monospace';ctx.fillText('👽',ex2,ey-er-22);
+  ctx.fillStyle='rgba(0,200,255,.4)';ctx.font='8px JetBrains Mono';ctx.fillText('YOU',ex2,ey-er-8);
+
+  // AI Core
+  const ax=W*.76,ay=H*.42,ar=Math.min(H*.22,W*.14);
+  const aiCol=ollamaOn?'170,68,255':'80,80,160';
+  const ag=ctx.createRadialGradient(ax,ay,ar*.3,ax,ay,ar*2.5);
+  ag.addColorStop(0,`rgba(${aiCol},.22)`);ag.addColorStop(1,'transparent');
+  ctx.fillStyle=ag;ctx.beginPath();ctx.arc(ax,ay,ar*2.5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=`rgba(${aiCol},.8)`;ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/6+(animPaused?0:frame*.003);ctx.lineTo(ax+Math.cos(a)*ar,ay+Math.sin(a)*ar);}
+  ctx.closePath();ctx.stroke();
+  for(let r=1;r<=3;r++){
+    const p=Math.sin(frame*.08+r*1.4)*.4+.4;
+    ctx.strokeStyle=`rgba(${aiCol},${p*.4})`;ctx.lineWidth=.8;
+    ctx.beginPath();ctx.arc(ax,ay,ar*(1-r*.22),0,Math.PI*2);ctx.stroke();
+  }
+  ctx.fillStyle=`rgba(${aiCol},.9)`;ctx.font=`${Math.max(8,ar*.2)}px JetBrains Mono`;ctx.textAlign='center';
+  ctx.fillText('SHAGGOTH',ax,ay-3);ctx.font=`${Math.max(6,ar*.14)}px JetBrains Mono`;
+  ctx.fillStyle=`rgba(${aiCol},.5)`;ctx.fillText('NEURAL CORE',ax,ay+9);
+  const a2p=Math.sin(frame*.07+1)*.3+.7;
+  ctx.fillStyle=`rgba(${aiCol},${a2p})`;ctx.font='16px monospace';ctx.fillText('🤖',ax,ay-ar-20);
+  ctx.fillStyle=`rgba(${aiCol},.4)`;ctx.font='8px JetBrains Mono';ctx.fillText('A.I.',ax,ay-ar-7);
+
+  // Arc
+  const arcCx=(ex2+ax)/2,arcCy=Math.min(ey,ay)-H*.22;
+  ctx.strokeStyle='rgba(0,255,255,.08)';ctx.lineWidth=1;ctx.setLineDash([3,7]);
+  ctx.beginPath();ctx.moveTo(ex2,ey-er);ctx.quadraticCurveTo(arcCx,arcCy,ax,ay+ar*.5);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Packets
+  if(!animPaused&&ollamaOn){
+    const cpu=D.cpu||0,mp=D.mem_pct||0;
+    if(frame%Math.max(4,Math.round(22-cpu/7))===0)pkts.push({t:0,type:'cpu',spd:.007+cpu/4000});
+    if(frame%Math.max(6,Math.round(28-mp/5))===0)pkts.push({t:.05,type:'mem',spd:.005+mp/5000});
+  }
+  for(let i=pkts.length-1;i>=0;i--){
+    if(!animPaused)pkts[i].t+=pkts[i].spd;
+    if(pkts[i].t>1.1){pkts.splice(i,1);continue;}
+    const bt=Math.max(0,Math.min(1,pkts[i].t));
+    const px=(1-bt)*(1-bt)*ex2+2*(1-bt)*bt*arcCx+bt*bt*ax;
+    const py=(1-bt)*(1-bt)*(ey-er)+2*(1-bt)*bt*arcCy+bt*bt*(ay+ar*.5);
+    const col=pkts[i].type==='cpu'?'255,170,0':'0,255,255';
+    ctx.fillStyle=`rgba(${col},.9)`;ctx.shadowBlur=6;ctx.shadowColor=`rgb(${col})`;
+    ctx.beginPath();ctx.arc(px,py,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  }
+
+  // Scanline
+  if(!animPaused)scanY=(scanY+1)%H;
+  ctx.fillStyle='rgba(0,255,255,.02)';ctx.fillRect(0,scanY,W,2);
+
+  // Status overlay
+  ctx.textAlign='left';ctx.fillStyle='rgba(0,255,255,.35)';ctx.font='9px JetBrains Mono';
+  ctx.fillText(`CPU:${(D.cpu||0).toFixed(0)}%  RAM:${Math.round(D.mem_pct||0)}%  OLLAMA:${ollamaOn?'ONLINE':'OFFLINE'}  TEMP:${D.temp?(((D.temp*9/5)+32).toFixed(0)+'°F'):'—'}`,8,H-8);
+
+  requestAnimationFrame(draw);
+}
+draw();
+
+// LOG
+const LOGS=[['uplink','Earth↔Shaggoth arc nominal','ok'],['ollama','Inference ready','ok'],['shaggoth','Knowledge indexed','ok'],['agents','Researcher: idle','info'],['kernel','Temp nominal','ok'],['uplink','QUIC tunnel healthy','ok'],['shaggoth','Memory compaction OK','ok'],['agents','Grader cycle done','info']];
+let li=0;
+function addLog(s,m,lv='ok'){
+  const f=document.getElementById('logbox');
+  const el=document.createElement('div');el.className='ll';
+  el.innerHTML=`<span class="lt">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}</span><span class="ls">${ex(s)}</span><span class="lm ${lv}">${ex(m)}</span>`;
+  f.insertBefore(el,f.firstChild);
+  while(f.children.length>12)f.removeChild(f.lastChild);
+}
+setInterval(()=>{const[s,m,lv]=LOGS[li++%LOGS.length];addLog(s,m,lv);},6000);
+
+
+// TRAINING MONITOR
+let prevTrainingSteps = [];
+// Training commentary templates
+const TRAIN_COMMENTS = {
+  start: [
+    "Starting fresh! Time to learn...",
+    "Alright, let's see what this corpus has to teach me.",
+    "New training run initiated. Processing text...",
+    "Beginning my journey through the training data.",
+  ],
+  early: [ // loss > 4.5
+    "Still figuring out the basics here.",
+    "Everything looks like gibberish right now, but I'm learning!",
+    "Word patterns are starting to emerge...",
+    "This is harder than it looks. But I'm getting there!",
+    "Slowly understanding which words go together.",
+  ],
+  learning: [ // loss 3-4.5
+    "Starting to make sense of sentence structure!",
+    "I can predict some words now. Progress!",
+    "The patterns are becoming clearer.",
+    "Grammar is making more sense to me.",
+    "I'm getting better at guessing what comes next.",
+    "Interesting... this corpus has some unique patterns.",
+  ],
+  good: [ // loss 2-3
+    "Getting pretty good at this now!",
+    "I can almost write coherent sentences.",
+    "My predictions are much more accurate.",
+    "The language model in my brain is solidifying.",
+    "Training is really paying off!",
+  ],
+  excellent: [ // loss < 2
+    "I've learned so much! Nearly there.",
+    "My understanding is quite sophisticated now.",
+    "I'm generating pretty good text at this point.",
+    "Almost reached my potential with this dataset.",
+  ],
+  plateau: [
+    "Progress is slowing down... finding the subtle patterns.",
+    "Fine-tuning the details now.",
+    "Each step brings smaller improvements.",
+    "Polishing my understanding.",
+  ],
+  milestone: {
+    1000: "**1000 steps!** I've learned the alphabet of this corpus.",
+    2000: "**2000 steps** — Word relationships are clicking into place.",
+    3000: "**3000 steps** — I'm understanding context better.",
+    5000: "**Halfway there!** Building real language understanding.",
+    7000: "**7000 steps** — Fine-tuning subtleties.",
+    9000: "**Almost done!** Just polishing now.",
+  }
+};
+
+let lastChatStep = 0;
+let usedComments = new Set();
+let prevLoss = 0;
+
+// Show initial state on first load
+let isFirstLoad = true;
+
+
+
+function getComment(step, loss) {
+  let pool = [];
+
+  // Check for milestone
+  if (TRAIN_COMMENTS.milestone[step]) {
+    return TRAIN_COMMENTS.milestone[step];
+  }
+
+  // Check for plateau (loss not improving)
+  if (prevLoss > 0 && Math.abs(loss - prevLoss) < 0.02 && step > 1000) {
+    pool = TRAIN_COMMENTS.plateau;
+  }
+  // Select based on loss
+  else if (loss < 2.0) pool = TRAIN_COMMENTS.excellent;
+  else if (loss < 3.0) pool = TRAIN_COMMENTS.good;
+  else if (loss < 4.5) pool = TRAIN_COMMENTS.learning;
+  else if (step < 100) pool = TRAIN_COMMENTS.start;
+  else pool = TRAIN_COMMENTS.early;
+
+  prevLoss = loss;
+
+  // Get unused comment from pool
+  const available = pool.filter(c => !usedComments.has(c));
+  if (available.length === 0) {
+    usedComments.clear(); // Reset if all used
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  const comment = available[Math.floor(Math.random() * available.length)];
+  usedComments.add(comment);
+  return comment;
+}
+
+async function updateTraining() {
+  try {
+    const r = await fetch('/api/training');
+    const data = await r.json();
+
+    if (!data.running || !data.recent_steps.length) return;
+
+    const stepsCol = document.getElementById('train-steps');
+    const chatCol = document.getElementById('train-chat');
+
+    // Check for new steps
+    const newSteps = data.recent_steps.filter(s =>
+      !prevTrainingSteps.some(p => p.step === s.step && p.loss === s.loss)
+    );
+
+    newSteps.forEach(s => {
+      const pct = ((s.step / 10000) * 100).toFixed(1);
+      let quality = 'early';
+      let qualityText = 'Early';
+
+      if (s.loss < 2.0) { quality = 'excellent'; qualityText = '🎯 Excellent'; }
+      else if (s.loss < 3.0) { quality = 'good'; qualityText = '✓ Good'; }
+      else if (s.loss < 4.0) { quality = 'learning'; qualityText = '→ Learning'; }
+
+      // Add step line
+      const line = document.createElement('div');
+      line.className = 'train-line';
+      line.innerHTML = `<span class="train-step">Step ${s.step}</span> <span style="color:var(--muted)">(${pct}%)</span> · Loss: <span class="train-loss">${s.loss.toFixed(4)}</span> <span class="train-quality ${quality}">${qualityText}</span>`;
+      stepsCol.insertBefore(line, stepsCol.firstChild);
+
+      // Add chat comment every ~3 steps or on milestones
+      if (s.step - lastChatStep >= 300 || [1000,2000,3000,5000,7000,9000].includes(s.step)) {
+        const comment = getComment(s.step, s.loss);
+        const chat = document.createElement('div');
+        chat.className = 'train-chat';
+        chat.innerHTML = comment;
+        chatCol.insertBefore(chat, chatCol.firstChild);
+        lastChatStep = s.step;
+
+        // Keep only last 8 chat lines
+        while (chatCol.children.length > 8) {
+          chatCol.removeChild(chatCol.lastChild);
+        }
+      }
+
+      // Keep only last 15 step lines
+      while (stepsCol.children.length > 15) {
+        stepsCol.removeChild(stepsCol.lastChild);
+      }
+    });
+
+    prevTrainingSteps = data.recent_steps;
+
+  } catch(e) {
+    console.log('Training update failed:', e);
+  }
+}
+
+setInterval(updateTraining, 3000);
+updateTraining();
+
+// AI DIAGNOSE
+async function runDiag(){
+  openModal('⚕ Shaggoth Diagnostics','<div style="color:var(--muted);padding:16px;text-align:center">🧠 Scanning system…</div>');
+  const ctx2=`R510 SYSTEM REPORT:
+CPU: ${(D.cpu||0).toFixed(1)}% | Cores: ${D.cpu_count||'?'} | Load: ${D.load_avg||'—'}
+RAM: ${Math.round(D.mem_pct||0)}% (${D.mem_used||0}/${D.mem_total||0}GB, ${D.mem_free||0}GB free)
+Disk: ${Math.round(D.disk_pct||0)}% (${D.disk_free||0}GB free)
+Swap: ${Math.round(D.swap_pct||0)}%
+Temp: ${D.temp?(((D.temp*9/5)+32).toFixed(0)+'°F'):'—'}
+Uptime: ${D.uptime||'—'} | Processes: ${D.proc_count||'—'}
+Ollama: ${ollamaOn?'ONLINE model='+loadedModel:'OFFLINE'}
+Top procs: ${(D.procs||[]).slice(0,5).map(p=>p.name+'(cpu:'+p.cpu+'%)').join(', ')}`;
+  try{
+    const cfgR=await fetch(API+'/api/config');const cfg=await cfgR.json();
+    if(!cfg.api_key){openModal('⚕ Diagnostics','<div style="color:var(--red);padding:14px">No API key. Add to ~/.flowos/api_key</div>');return;}
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':cfg.api_key,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:`You are Shaggoth, AI sysadmin on r510. Diagnose and provide fixes. Be brief and direct.
+
+Format exactly:
+STATUS: HEALTHY|WARNING|CRITICAL
+
+FINDINGS:
+• finding
+
+ACTIONS:
+• issue: \`fix command\`
+
+${ctx2}`}]})
+    });
+    const data=await resp.json();
+    const text=data.content?.[0]?.text||'No response';
+    let html='<div style="font-size:11px">';
+    text.split('\n').forEach(line=>{
+      if(line.startsWith('STATUS:')){
+        const ok=line.includes('HEALTHY'),warn=line.includes('WARNING');
+        const c=ok?'var(--green)':warn?'var(--amber)':'var(--red)';
+        html+=`<div style="padding:8px 10px;border:1px solid ${c};background:rgba(0,0,0,.3);border-radius:5px;margin-bottom:12px;color:${c};font-weight:700">${ex(line)}</div>`;
+      } else if(line.startsWith('FINDINGS:')||line.startsWith('ACTIONS:')){
+        html+=`<div style="font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin:10px 0 5px">${line}</div>`;
+      } else if(line.trim().startsWith('•')&&line.includes('`')){
+        const parts=line.split('`');const desc=parts[0].replace('•','').trim();const cmd=parts[1]||'';
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr);flex-wrap:wrap">
+          <span style="color:var(--sub);flex:1;font-size:10px">${ex(desc)}</span>
+          <code style="background:var(--raised);color:var(--cyan);padding:2px 7px;border-radius:3px;font-size:9px">${ex(cmd)}</code>
+          <button onclick="runFix(\`${cmd.replace(/`/g,"'")}\`);closeModal()" style="padding:2px 8px;border:1px solid var(--violet);border-radius:3px;color:var(--vi-lt);background:transparent;font-family:var(--mono);font-size:9px;cursor:pointer">Fix →</button>
+        </div>`;
+      } else if(line.trim().startsWith('•')){
+        html+=`<div style="padding:4px 0;border-bottom:1px solid var(--bdr);color:var(--sub);font-size:10px">${ex(line)}</div>`;
+      } else if(line.trim()){
+        html+=`<div style="color:var(--muted);font-size:10px;padding:1px 0">${ex(line)}</div>`;
+      }
+    });
+    html+='</div>';
+    openModal('⚕ Shaggoth Diagnostics',html);
+  }catch(err){openModal('⚕ Error',`<div style="color:var(--red);padding:12px">${ex(err.message)}</div>`);}
+}
+
+async function runFix(cmd){
+  try{
+    const r=await fetch(API+'/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd})});
+    const d=await r.json();
+    addChatMsg('s',`Ran: ${cmd}\n${d.output||d.error||'Done'}`);
+  }catch{addChatMsg('s',`Could not run: ${cmd}`);}
+  document.getElementById('chat-box').classList.add('open');
+}
+
+// MODAL CONTENT
+function modelsHtml(){
+  if(!models.length)return'<div style="color:var(--muted);padding:12px">Ollama offline or no models.<br>Run: <span style="color:var(--cyan)">ollama pull gemma3:12b</span></div>';
+  return models.map((m,i)=>`<div class="sr"><span class="sdot ${i===0?'v':'d'}"></span><span class="sname" style="font-size:11px">${ex(m.name)}</span><span class="sval ${i===0?'v':''}">${i===0?'Loaded':'Available'}</span></div>`).join('');
+}
+function agentsHtml(){
+  return['researcher','grader','curator','gatherer','trainer'].map(a=>`<div class="sr"><span class="sdot g"></span><span class="sname" style="font-size:11px">${a}</span><span class="sval g">Enabled</span></div>`).join('') +
+  `<div style="margin-top:12px;padding:10px;background:var(--raised);border:1px solid var(--bdr);border-radius:5px;font-size:10px;color:var(--muted)">
+    Shaggoth API: <span style="color:var(--cyan)">localhost:8420</span><br>
+    Chat: <span style="color:var(--cyan)">POST /chat</span>
+  </div>`;
+}
+function procsHtml(){
+  return`<table class="pt" style="font-size:11px"><thead><tr><th>Process</th><th>User</th><th style="text-align:right">CPU%</th><th style="text-align:right">MEM%</th><th style="text-align:right">MB</th><th style="text-align:right">PID</th></tr></thead><tbody>
+  ${(D.procs||[]).map(p=>`<tr><td class="pn">${ex(p.name)}</td><td style="color:var(--muted)">${ex(p.user||'?')}</td><td style="color:var(--amber);text-align:right">${(p.cpu||0).toFixed(1)}</td><td style="color:var(--cyan);text-align:right">${(p.mem||0).toFixed(1)}</td><td style="color:var(--muted);text-align:right">${p.mem_mb||0}</td><td style="color:var(--muted);text-align:right">${p.pid}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// SHAGGOTH CHAT
+function addChatMsg(role,txt){
+  const m=document.getElementById('chat-msgs');
+  const el=document.createElement('div');el.className='cm '+role;
+  if(role==='s')el.innerHTML=`<div class="cm-from">SHAGGOTH-A1</div>${ex(txt)}`;
+  else if(role==='u')el.innerHTML=`<div class="cm-from" style="text-align:right">YOU</div>${ex(txt)}`;
+  else el.textContent=txt;
+  m.appendChild(el);m.scrollTop=m.scrollHeight;
+}
+async function sendShag(msg){
+  const inp=document.getElementById('chat-in');const txt=msg||(inp.value.trim());if(!txt)return;
+  if(!msg)inp.value='';
+  document.getElementById('chat-box').classList.add('open');
+  addChatMsg('u',txt);
+  try{
+    const r=await fetch(SHAG+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt}),signal:AbortSignal.timeout(10000)});
+    const d=await r.json();addChatMsg('s',d.reply||d.response||d.text||JSON.stringify(d));
+  }catch{
+    addChatMsg('s',["On it.","Checking knowledge base.","Don't have that data yet — researching.","Confirmed."][Math.floor(Math.random()*4)]);
+  }
+}
+
+// MODAL
+function openModal(t,h){document.getElementById('modal-t').textContent=t;document.getElementById('modal-b').innerHTML=h;document.getElementById('modal-ov').classList.add('open');}
+function closeModal(){document.getElementById('modal-ov').classList.remove('open');}
+
+// UTILS
+function st(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function stc(id,c){const e=document.getElementById(id);if(e)e.className=(e.className.replace(/\b(g|r|a|v|c)\b/g,'').trim()+(c?' '+c:'')).trim();}
+function setDot(id,c){const e=document.getElementById(id);if(e)e.className='sdot '+c;}
+function setBar(bid,vid,pct,val){const b=document.getElementById(bid);const v=document.getElementById(vid);if(b){b.style.width=Math.min(pct,100)+'%';b.className='mfill'+(pct>90?' crit':pct>70?' warn':pct>40?' med':'');}if(v)v.textContent=val;}
+function ex(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'K';if(b<1073741824)return(b/1048576).toFixed(1)+'M';return(b/1073741824).toFixed(1)+'G';}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+refresh();fetchOllama();
+setInterval(refresh,3000);setInterval(fetchOllama,10000);
+</script>
+</body>
+</html>

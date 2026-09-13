@@ -1,0 +1,69 @@
+╔══════════════════════════════════════════════════════════════╗
+║  DEPLOY R510 DASHBOARD - FINAL INSTRUCTIONS                  ║
+╚══════════════════════════════════════════════════════════════╝
+
+PORT CONFIGURATION:
+  8080 → dump1090 (already running)
+  8420 → Shaggoth chat (already running)  
+  8421 → NEW R510 Dashboard ✅
+
+═══════════════════════════════════════════════════════════════
+
+STEP 1: Add Google Maps API Key
+─────────────────────────────────────────────────────────────
+
+cd ~/r510-command-center
+
+# Replace YOUR_API_KEY with your actual key:
+sed -i '' "s/YOUR_GOOGLE_MAPS_API_KEY/YOUR_API_KEY/g" command-center-dashboard.html
+
+
+STEP 2: Copy to R510
+─────────────────────────────────────────────────────────────
+
+scp -r ~/r510-command-center/ matt@192.168.0.169:~/
+
+
+STEP 3: Deploy on R510
+─────────────────────────────────────────────────────────────
+
+ssh matt@192.168.0.169
+
+cd ~/r510-command-center
+
+sudo ./r510-deploy-all.sh
+
+When prompted:
+  - FR24 MCP? → n (not needed)
+  - dump1090? → n (already running on port 8080)
+  - SpotCrime? → n (optional)
+
+
+STEP 4: Access Dashboard
+─────────────────────────────────────────────────────────────
+
+http://192.168.0.169:8421
+
+✅ Google Maps satellite view
+✅ Live aircraft from dump1090 (port 8080)
+✅ Squawk code glow effects
+✅ All panels active
+
+
+VERIFY AUTOSTART:
+─────────────────────────────────────────────────────────────
+
+cd ~/r510-command-center
+./verify-autostart.sh
+
+Should show: ✅ r510-dashboard ENABLED
+
+
+═══════════════════════════════════════════════════════════════
+
+PORTS SUMMARY:
+  dump1090:  http://192.168.0.169:8080
+  Shaggoth:  http://192.168.0.169:8420
+  Dashboard: http://192.168.0.169:8421 ← NEW!
+
+═══════════════════════════════════════════════════════════════

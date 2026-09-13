@@ -1,0 +1,164 @@
+╔══════════════════════════════════════════════════════════════╗
+║           R510 COMMAND CENTER DASHBOARD                      ║
+║           DEPLOYMENT INSTRUCTIONS                            ║
+╚══════════════════════════════════════════════════════════════╝
+
+✅ ALL CONFIGURATION COMPLETED
+✅ ALL DATA SOURCES ENABLED
+✅ AUTOSTART ON BOOT CONFIGURED
+✅ READY FOR R510 DEPLOYMENT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 WHAT'S INCLUDED:
+
+  ✓ index.html - Full dashboard with all features enabled
+  ✓ deploy-dashboard.sh - Installs dashboard service
+  ✓ setup-fr24-mcp.sh - Installs Flightradar24 MCP
+  ✓ setup-dump1090.sh - Installs dump1090 (if needed)
+  ✓ r510-deploy-all.sh - ONE-COMMAND full deployment
+  ✓ verify-autostart.sh - Verify boot persistence
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 CONFIGURATION (ALREADY SET):
+
+  FR24_ENABLED: true
+  DUMP1090_ENABLED: true  
+  DUMP1090_ENDPOINT: http://192.168.0.169:8080/data/aircraft.json
+  SDR_HARDWARE_CONNECTED: true
+  MAP_CENTER: Omaha, NE (41.2565, -95.9345)
+  
+  ⚡ Fast update intervals for real-time data
+  ⚡ Survives reboots (systemd services)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 DEPLOY TO R510 (3 STEPS):
+
+1️⃣  COPY FILES TO R510
+
+    scp -r ~/r510-command-center/ user@192.168.0.169:~/
+
+2️⃣  SSH TO R510 & DEPLOY
+
+    ssh user@192.168.0.169
+    cd ~/r510-command-center
+    sudo ./r510-deploy-all.sh
+
+    The script will:
+    ✓ Deploy dashboard on port 8421
+    ✓ Install FR24 MCP (optional)
+    ✓ Configure systemd services
+    ✓ Enable autostart on boot
+    ✓ Configure firewall
+
+3️⃣  ACCESS DASHBOARD
+
+    http://192.168.0.169:8421
+
+    Done! 🎉
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 VERIFY AUTOSTART (After Deployment):
+
+    cd ~/r510-command-center
+    ./verify-autostart.sh
+
+    This checks that services will start on boot.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 TEST LOCALLY FIRST (Optional):
+
+    cd ~/r510-command-center
+    python3 -m http.server 8421
+    
+    Open: http://localhost:8421/index.html
+    
+    Should see:
+    ✓ Aircraft from 192.168.0.169:8080
+    ✓ Interactive map with real flights
+    ✓ Crime data (simulated)
+    ✓ All telemetry animating
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 DASHBOARD FEATURES (ALL ENABLED):
+
+  ✅ Live Air Traffic
+     - Real data from dump1090 at 192.168.0.169:8080
+     - FR24 MCP fallback
+     - Updates every 3 seconds
+  
+  ✅ Crime & CAD Feed
+     - SpotCrime API ready (add key later)
+     - Simulated data until key added
+     - Updates every 30 seconds
+  
+  ✅ Shaggoth-A1 Metrics
+     - Training loss curve
+     - System telemetry
+     - Service status
+  
+  ✅ Broadcastify Ready
+     - Douglas County P25 (pending approval)
+     - SDR hardware detection enabled
+  
+  ✅ CIA Reading Room
+     - Intelligence document feed
+     - Redacted text highlighting
+  
+  ✅ System Logs
+     - Real-time log stream
+     - Service monitoring
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 POST-DEPLOYMENT (Optional):
+
+  Add SpotCrime API Key:
+    ssh user@192.168.0.169
+    sudo systemctl edit r510-dashboard
+    
+    Add:
+    [Service]
+    Environment="SPOTCRIME_API_KEY=your_key"
+    
+    sudo systemctl restart r510-dashboard
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💾 BOOT PERSISTENCE GUARANTEED:
+
+  All services configured with:
+  - systemctl enable (autostart)
+  - WantedBy=multi-user.target
+  - Restart=always
+  
+  Dashboard will auto-start on:
+  ✓ Server boot
+  ✓ Service crash
+  ✓ Network reconnect
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DOCUMENTATION:
+
+  QUICKSTART.md       - 5-minute quick start
+  DEPLOYMENT.md       - Full deployment guide
+  DASHBOARD_README.md - Dashboard features
+  TEST-DASHBOARD.md   - Local testing guide
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ READY TO DEPLOY!
+
+Run this now:
+  scp -r ~/r510-command-center/ user@192.168.0.169:~/
+
+Then SSH and run:
+  sudo ./r510-deploy-all.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
