@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh Omaha crime data into kiosk crime.json (every 5 min)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/matt/r510-command-center/scripts/refresh_crime.py --out /home/matt/r510-command-center/crime.json
+Nice=10

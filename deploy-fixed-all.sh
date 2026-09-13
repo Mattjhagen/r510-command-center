@@ -34,6 +34,11 @@ fi
 cp /home/matt/r510-command-center/index.html "$DASHBOARD_DIR/"
 chmod 644 "$DASHBOARD_DIR/index.html"
 echo "   ✅ Deployed to $DASHBOARD_DIR/index.html"
+if [ -f /home/matt/r510-command-center/crime.json ]; then
+    cp /home/matt/r510-command-center/crime.json "$DASHBOARD_DIR/crime.json"
+    chmod 644 "$DASHBOARD_DIR/crime.json"
+    echo "   ✅ crime.json deployed to $DASHBOARD_DIR/"
+fi
 
 # Backup and deploy to port 7072 location (where Chrome kiosk is pointed)
 echo ""
@@ -47,6 +52,12 @@ cp /home/matt/r510-command-center/index.html "$WEB_DIR/r510.html"
 chown matt:matt "$WEB_DIR/r510.html"
 chmod 644 "$WEB_DIR/r510.html"
 echo "   ✅ Deployed to $WEB_DIR/r510.html"
+if [ -f /home/matt/r510-command-center/crime.json ]; then
+    cp /home/matt/r510-command-center/crime.json "$WEB_DIR/crime.json"
+    chown matt:matt "$WEB_DIR/crime.json"
+    chmod 644 "$WEB_DIR/crime.json"
+    echo "   ✅ crime.json deployed to $WEB_DIR/"
+fi
 
 # Restart services
 echo ""

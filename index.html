@@ -805,12 +805,17 @@
             MAP_CENTER: [41.2565, -95.9345],
             MAP_ZOOM: 11,
             UPDATE_INTERVAL: 2000,
-            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460'
+            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460',
+            CRIME_JSON_URL: 'crime.json',
+            CRIME_REFRESH_MS: 600000
         };
+
+        const KIOSK_CRIME = null; /*__CRIME_SPLICE__*/
 
         let map, aircraftMarkers = {}, crimeMarkers = [];
         let aircraft = [], crimeData = [];
         let currentFocusedCrimeIndex = 0;
+        let lastCrimeRequest = 0;
         let scannerPlaying = false, scannerAudio = null;
         let transcriptInterval = null;  // Track interval to prevent duplicates
 
@@ -897,6 +902,7 @@
                 setTimeout(() => {
                     try {
                         generateCrimeData();
+                        lastCrimeRequest = Date.now();
                         if (crimeData.length > 0) focusOnCrime(0);
                     } catch (err) {
                         console.error('Crime setup error:', err);
@@ -1023,47 +1029,80 @@
 
         const STREET_NAMES = ['DODGE', 'PACIFIC', 'FARNAM', 'CAPITOL', 'LEAVENWORTH', 'CUMING', 'CALIFORNIA', 'BURT'];
 
-        function generateCrimeData() {
-            try {
-                const previousHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
-                crimeData = Array.from({ length: 12 }, () => {
-                    const crimeType = CRIME_TYPES[Math.floor(Math.random() * CRIME_TYPES.length)];
-                    const now = new Date();
-                    const minutesAgo = Math.floor(Math.random() * 120);
-                    const crimeTime = new Date(now - minutesAgo * 60000);
-                    return {
-                        ...crimeType,
-                        lat: CONFIG.MAP_CENTER[0] + (Math.random() - 0.5) * 0.1,
-                        lng: CONFIG.MAP_CENTER[1] + (Math.random() - 0.5) * 0.1,
-                        location: `${Math.floor(Math.random() * 9000 + 1000)} ${STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]} ST`,
-                        time: crimeTime.toLocaleTimeString(),
-                        minutesAgo: minutesAgo,
-                        status: minutesAgo < 30 ? 'ACTIVE' : 'LOGGED',
-                        units: Math.floor(Math.random() * 3) + 1,
-                        reportId: `R510-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-                    };
-                });
-                crimeData.sort((a, b) => b.urgency - a.urgency);
-                const newHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
-                const isNewCrime = !previousHighPriority || (newHighPriority && newHighPriority.reportId !== previousHighPriority.reportId);
-                updateCrimeMarkers();
-                updateCrimeList();
-                const el = safeGet('crime-status');
-                if (el) el.className = 'status-dot';
-                if (isNewCrime && newHighPriority) {
-                    const newIndex = crimeData.findIndex(c => c.reportId === newHighPriority.reportId);
-                    if (newIndex !== -1) {
-                        focusOnCrime(newIndex);
-                        addLog('error', `HIGH PRIORITY: ${newHighPriority.type} at ${newHighPriority.location}`);
-                    } else {
-                        updateCrimeDetails();
-                    }
+        function finalizeCrime(previousHighPriority) {
+            crimeData.sort((a, b) => b.urgency - a.urgency);
+            const newHighPriority = crimeData.find(c => c.urgency >= 9) || null;
+            const isNewCrime = !previousHighPriority || (newHighPriority && newHighPriority.reportId !== previousHighPriority.reportId);
+            updateCrimeMarkers();
+            updateCrimeList();
+            if (isNewCrime && newHighPriority) {
+                const newIndex = crimeData.findIndex(c => c.reportId === newHighPriority.reportId);
+                if (newIndex !== -1) {
+                    focusOnCrime(newIndex);
+                    addLog('error', 'HIGH PRIORITY: ' + newHighPriority.type + ' at ' + newHighPriority.location);
                 } else {
                     updateCrimeDetails();
                 }
+            } else {
+                updateCrimeDetails();
+            }
+        }
+
+        function setCrimeStatus(live) {
+            const el = safeGet('crime-status');
+            if (el) {
+                el.className = live ? 'status-dot' : 'status-dot offline';
+                el.title = live ? 'LIVE OMAHA PD FEED' : live === null ? '' : 'MOCK DATA - FEED OFFLINE';
+            }
+        }
+
+        function generateMockCrime(previousHighPriority) {
+            crimeData = Array.from({ length: 12 }, () => {
+                const crimeType = CRIME_TYPES[Math.floor(Math.random() * CRIME_TYPES.length)];
+                const now = new Date();
+                const minutesAgo = Math.floor(Math.random() * 120);
+                const crimeTime = new Date(now - minutesAgo * 60000);
+                return {
+                    ...crimeType,
+                    lat: CONFIG.MAP_CENTER[0] + (Math.random() - 0.5) * 0.1,
+                    lng: CONFIG.MAP_CENTER[1] + (Math.random() - 0.5) * 0.1,
+                    location: `${Math.floor(Math.random() * 9000 + 1000)} ${STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]} ST`,
+                    time: crimeTime.toLocaleTimeString(),
+                    minutesAgo: minutesAgo,
+                    status: minutesAgo < 30 ? 'ACTIVE' : 'LOGGED',
+                    units: Math.floor(Math.random() * 3) + 1,
+                    reportId: `R510-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+                };
+            });
+            finalizeCrime(previousHighPriority);
+        }
+
+        async function generateCrimeData() {
+            try {
+                const previousHighPriority = crimeData.filter(c => c.urgency >= 9)[0] || null;
+                let data = null;
+                if (KIOSK_CRIME && Array.isArray(KIOSK_CRIME.incidents) && KIOSK_CRIME.incidents.length) {
+                    data = KIOSK_CRIME;
+                } else {
+                    const resp = await fetch(CONFIG.CRIME_JSON_URL || 'crime.json', { cache: 'no-store' });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    data = await resp.json();
+                }
+                if (!data || !Array.isArray(data.incidents) || !data.incidents.length) throw new Error('empty feed');
+                crimeData = data.incidents.map(i => ({
+                    type: i.type, class: i.class, color: i.color,
+                    urgency: i.urgency, urgencyLabel: i.urgencyLabel,
+                    lat: i.lat, lng: i.lng, location: i.location,
+                    time: i.time, minutesAgo: i.minutesAgo, status: i.status,
+                    units: i.units ?? null, reportId: i.reportId
+                }));
+                finalizeCrime(previousHighPriority);
+                setCrimeStatus(true);
             } catch (err) {
-                console.error('generateCrimeData error:', err);
-                addLog('error', 'CRIME DATA ERROR');
+                console.error('crime feed offline, using mock:', err);
+                generateMockCrime(crimeData.filter(c => c.urgency >= 9)[0] || null);
+                setCrimeStatus(false);
+                addLog('error', 'CRIME FEED OFFLINE - MOCK DATA');
             }
         }
 
@@ -1132,10 +1171,11 @@
                         </div>
                         <div class="crime-detail-info">
                             <div class="crime-detail-row"><span class="crime-detail-label">REPORT ID:</span><span>${crime.reportId}</span></div>
+                            ${crime.nibrs ? `<div class="crime-detail-row"><span class="crime-detail-label">NIBRS:</span><span>${crime.nibrs}</span></div>` : ''}
                             <div class="crime-detail-row"><span class="crime-detail-label">LOCATION:</span><span>${crime.location}</span></div>
                             <div class="crime-detail-row"><span class="crime-detail-label">TIME:</span><span>${crime.time} (${crime.minutesAgo} minutes ago)</span></div>
                             <div class="crime-detail-row"><span class="crime-detail-label">STATUS:</span><span style="color: ${crime.status === 'ACTIVE' ? '#EF4444' : '#10b981'};">${crime.status}</span></div>
-                            <div class="crime-detail-row"><span class="crime-detail-label">UNITS:</span><span>${crime.units} dispatched</span></div>
+                            <div class="crime-detail-row"><span class="crime-detail-label">UNITS:</span><span>${crime.units != null ? crime.units + ' dispatched' : 'N/A'}</span></div>
                             <div class="crime-detail-row"><span class="crime-detail-label">COORD:</span><span style="font-family: monospace; font-size: 7px;">${crime.lat.toFixed(5)}, ${crime.lng.toFixed(5)}</span></div>
                         </div>
                     </div>
@@ -1480,8 +1520,11 @@
         setInterval(updateTelemetry, 3000);
         setInterval(() => {
             try {
-                generateCrimeData();
-                addLog('info', 'CRIME DATA REFRESH');
+                if (Date.now() - lastCrimeRequest >= (CONFIG.CRIME_REFRESH_MS || 600000)) {
+                    lastCrimeRequest = Date.now();
+                    generateCrimeData();
+                    addLog('info', 'CRIME DATA REFRESH');
+                }
             } catch (err) {}
         }, 60000);
         setInterval(() => {
