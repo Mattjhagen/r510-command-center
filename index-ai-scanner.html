@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[CLASSIFIED] R510 - ORBITAL AI COMMAND CENTER - NODE 01</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            overflow-x: hidden;
+            width: 100%;
+        }
+
+        body {
+            background: #0f1419;
+            color: #a8b2bc;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            font-size: 10px;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #root {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            grid-template-columns: minmax(0, 1fr);
+            height: 100vh;
+            padding: 3px;
+            gap: 3px;
+            max-width: 100vw;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #1a1f26;
+            color: #a8b2bc;
+            padding: 5px 12px;
+            border: 1px solid #4a8fa0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+        }
+
+        .header-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .header-status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #6ea87d;
+            box-shadow: 0 0 6px #6ea87d;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-dot.offline {
+            background: #c96c6c;
+            box-shadow: 0 0 6px #c96c6c;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr) 400px;
+            grid-template-rows: 1fr;
+            gap: 3px;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .panel {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            color: #6eb3c4;
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #4a8fa0;
+            letter-spacing: 0.5px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: #0d0518;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: #4a8fa0;
+            border-radius: 2px;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+        }
+
+        .leaflet-container {
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Dark mode filter for map tiles */
+        .map-tiles-dark {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #1a1f26;
+            color: #a8b2bc;
+            border: 1px solid #4a8fa0;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+        }
+
+        /* CRIME DETAILS PANEL */
+        .crime-details-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            height: 100%;
+        }
+
+        .crime-detail-card {
+            background: #1f2429;
+            border: 1px solid #4a8fa0;
+            padding: 8px;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .crime-detail-card.focused {
+            border-color: #6eb3c4;
+            box-shadow: 0 0 10px rgba(110, 179, 196, 0.3);
+        }
+
+        .crime-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .crime-detail-type {
+            font-weight: bold;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .crime-detail-urgency {
+            font-size: 7px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            background: rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+            font-weight: bold;
+        }
+
+        .crime-detail-urgency.high { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+        .crime-detail-urgency.medium { background: rgba(245, 158, 11, 0.2); color: #F59E0B; }
+        .crime-detail-urgency.low { background: rgba(59, 130, 246, 0.2); color: #3B82F6; }
+
+        .crime-detail-info {
+            font-size: 8px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .crime-detail-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 3px;
+        }
+
+        .crime-detail-label {
+            color: #6eb3c4;
+            min-width: 50px;
+        }
+
+        /* FLIGHTS */
+        .flight-row {
+            font-size: 8px;
+            padding: 3px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .flight-callsign {
+            color: #10b981;
+            font-weight: bold;
+            font-size: 9px;
+        }
+
+        .flight-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+            display: inline-block;
+        }
+
+        .squawk-emergency {
+            color: #EF4444 !important;
+            animation: pulse-emergency 1s infinite;
+        }
+
+        .squawk-vfr {
+            color: #3B82F6 !important;
+        }
+
+        @keyframes pulse-emergency {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* CRIME */
+        .crime-row {
+            font-size: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            gap: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .crime-row:hover {
+            background: #1a1a2e;
+        }
+
+        .crime-row.focused {
+            background: rgba(74, 143, 160, 0.2);
+        }
+
+        .crime-marker {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .crime-assault { background: #c96c6c; box-shadow: 0 0 6px #c96c6c; }
+        .crime-robbery { background: #d4a574; box-shadow: 0 0 6px #d4a574; }
+        .crime-burglary { background: #9884c4; box-shadow: 0 0 6px #9884c4; }
+        .crime-theft { background: #6b9bc4; box-shadow: 0 0 6px #6b9bc4; }
+        .crime-vandalism { background: #6eb3c4; box-shadow: 0 0 6px #6eb3c4; }
+
+        .crime-pulse {
+            animation: crime-pulse 2s infinite;
+        }
+
+        @keyframes crime-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* TELEMETRY */
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8px;
+            padding: 2px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+
+        .telemetry-label {
+            color: #6b7280;
+        }
+
+        .telemetry-value {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        /* LOGS */
+        .log-line {
+            font-size: 7px;
+            padding: 1px 0;
+            color: #6b7280;
+        }
+
+        .log-timestamp {
+            color: #6eb3c4;
+            margin-right: 4px;
+        }
+
+        .log-info { color: #6ea87d; }
+        .log-warn { color: #d4a574; }
+        .log-error { color: #c96c6c; }
+
+        .footer {
+            background: #1a1f26;
+            border: 1px solid #4a8fa0;
+            padding: 4px 12px;
+            font-size: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            color: #7a8893;
+        }
+
+        .footer-top {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .marquee-container {
+            background: #0f1419;
+            border: 1px solid #4a8fa0;
+            padding: 4px 8px;
+            overflow: hidden;
+            height: 20px;
+            position: relative;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 60s linear infinite;
+            padding-left: 100%;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .marquee-item {
+            display: inline-block;
+            margin-right: 40px;
+            color: #6ea87d;
+            font-size: 8px;
+        }
+
+        .marquee-item.traffic {
+            color: #d4a574;
+        }
+
+        .marquee-item.crime {
+            color: #c96c6c;
+        }
+
+        /* Emergency squawk pulse on map */
+        .emergency-squawk-pulse {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.3);
+            position: absolute;
+            animation: emergency-pulse 1.5s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes emergency-pulse {
+            0% {
+                transform: scale(0.5);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        /* Leaflet Popup Customization */
+        .leaflet-popup-content-wrapper {
+            background: #0f1419 !important;
+            border: 1px solid #4a8fa0 !important;
+            border-radius: 4px !important;
+            padding: 0 !important;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .leaflet-popup-content {
+            margin: 0 !important;
+            color: #a8b2bc !important;
+        }
+
+        .leaflet-popup-tip {
+            background: #0f1419 !important;
+            border: 1px solid #4a8fa0 !important;
+        }
+
+        .leaflet-popup-close-button {
+            color: #6eb3c4 !important;
+            font-size: 18px !important;
+            padding: 4px 8px !important;
+        }
+
+        .leaflet-popup-close-button:hover {
+            color: #c96c6c !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-title">R510 COMMAND CENTER /// ORBITAL NODE-01</div>
+            <div class="header-status">
+                <div class="status-indicator">
+                    <div class="status-dot" id="adsb-status"></div>
+                    <span>ADS-B</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot offline" id="shaggoth-status"></div>
+                    <span>SHAGGOTH-A1</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="crime-status"></div>
+                    <span>CRIME</span>
+                </div>
+                <span id="timestamp">LOADING...</span>
+            </div>
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="main-grid">
+            <!-- LEFT COLUMN: ACTIVE INCIDENTS + CAMERA + THREAT MATRIX -->
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+                <div class="panel" style="flex: 0.8;">
+                    <div class="panel-title">🚨 ACTIVE INCIDENT: <span id="focused-crime-name">INITIALIZING...</span></div>
+                    <div class="panel-content" id="crime-details"></div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title">📹 <span id="camera-name">LOADING...</span> • <span id="camera-distance" style="color: #7a8893; font-size: 8px;">--</span></div>
+                    <div class="panel-content" style="padding: 0; position: relative; background: #000;">
+                        <img id="camera-feed" style="width: 100%; height: 100%; object-fit: contain; display: none;" alt="Traffic Camera">
+                        <div id="camera-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #6eb3c4; font-size: 10px;">Loading camera...</div>
+                    </div>
+                </div>
+                <div class="panel" style="flex: 0.6;">
+                    <div class="panel-title">⚠️ THREAT MATRIX</div>
+                    <div class="panel-content" id="threat-matrix">
+                        <div style="padding: 10px 0;">
+                            <div style="margin-bottom: 10px; font-size: 9px; color: #6eb3c4; font-weight: bold; border-bottom: 1px solid #4a8fa0; padding-bottom: 4px;">SEVERITY CLASSIFICATION</div>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(201, 108, 108, 0.1); border-left: 3px solid #c96c6c;">
+                                    <div class="crime-marker crime-assault"></div>
+                                    <div style="flex: 1;">
+                                        <div style="color: #c96c6c; font-size: 9px; font-weight: bold;">LEVEL 5 - ASSAULT / VIOLENCE</div>
+                                        <div style="color: #7a8893; font-size: 7px;">Armed suspects, officer safety critical</div>
+                                    </div>
+                                    <div style="color: #c96c6c; font-size: 10px; font-weight: bold;">HIGH</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(212, 165, 116, 0.1); border-left: 3px solid #d4a574;">
+                                    <div class="crime-marker crime-robbery"></div>
+                                    <div style="flex: 1;">
+                                        <div style="color: #d4a574; font-size: 9px; font-weight: bold;">LEVEL 4 - ROBBERY / ARMED</div>
+                                        <div style="color: #7a8893; font-size: 7px;">Property crime with weapons present</div>
+                                    </div>
+                                    <div style="color: #d4a574; font-size: 10px; font-weight: bold;">HIGH</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(152, 132, 196, 0.1); border-left: 3px solid #9884c4;">
+                                    <div class="crime-marker crime-burglary"></div>
+                                    <div style="flex: 1;">
+                                        <div style="color: #9884c4; font-size: 9px; font-weight: bold;">LEVEL 3 - BURGLARY</div>
+                                        <div style="color: #7a8893; font-size: 7px;">Breaking and entering, structural access</div>
+                                    </div>
+                                    <div style="color: #9884c4; font-size: 10px; font-weight: bold;">MED</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(107, 155, 196, 0.1); border-left: 3px solid #6b9bc4;">
+                                    <div class="crime-marker crime-theft"></div>
+                                    <div style="flex: 1;">
+                                        <div style="color: #6b9bc4; font-size: 9px; font-weight: bold;">LEVEL 2 - THEFT / LARCENY</div>
+                                        <div style="color: #7a8893; font-size: 7px;">Non-violent property crime</div>
+                                    </div>
+                                    <div style="color: #6b9bc4; font-size: 10px; font-weight: bold;">LOW</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; padding: 4px; background: rgba(110, 179, 196, 0.1); border-left: 3px solid #6eb3c4;">
+                                    <div class="crime-marker crime-vandalism"></div>
+                                    <div style="flex: 1;">
+                                        <div style="color: #6eb3c4; font-size: 9px; font-weight: bold;">LEVEL 1 - VANDALISM</div>
+                                        <div style="color: #7a8893; font-size: 7px;">Property damage, graffiti</div>
+                                    </div>
+                                    <div style="color: #6eb3c4; font-size: 10px; font-weight: bold;">LOW</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER: MAP -->
+            <div class="panel">
+                <div class="panel-title">📍 OMAHA METRO - ACTIVE INCIDENTS MAP</div>
+                <div id="map"></div>
+            </div>
+
+            <!-- RIGHT COLUMN: POLICE SCANNER TRANSCRIPT -->
+            <div class="panel">
+                <div class="panel-title">📻 OMAHA POLICE SCANNER - <span id="scanner-status" style="color: #c96c6c;">LIVE</span></div>
+                <div class="panel-content" style="padding: 0;">
+                    <div style="display: flex; flex-direction: column; height: 100%;">
+                        <!-- Scanner Controls -->
+                        <div style="background: #1f2429; padding: 8px; border-bottom: 1px solid #4a8fa0; display: flex; align-items: center; gap: 12px;">
+                            <div id="scanner-pulse" style="width: 10px; height: 10px; background: #c96c6c; border-radius: 50%; box-shadow: 0 0 8px #c96c6c; animation: pulse-dot 1s infinite;"></div>
+                            <span style="color: #6eb3c4; font-size: 9px; font-weight: bold;">BROADCASTIFY FEED</span>
+                            <div style="flex: 1;"></div>
+                            <div style="color: #7a8893; font-size: 7px; font-family: monospace;">TALKGROUP: OPD MAIN</div>
+                        </div>
+
+                        <!-- Live Transcription -->
+                        <div id="scanner-transcript-container" style="flex: 1; background: #000; padding: 12px; overflow-y: auto; font-size: 9px; line-height: 1.6;">
+                            <div id="scanner-transcript" style="display: flex; flex-direction: column; gap: 6px;">
+                                <div style="color: #6eb3c4; font-weight: bold; border-bottom: 1px solid #4a8fa0; padding-bottom: 6px; margin-bottom: 6px; font-size: 10px;">
+                                    🔊 LIVE RADIO TRANSCRIPT
+                                </div>
+                                <div style="color: #6b7280; padding: 20px; text-align: center; font-size: 8px;">
+                                    Initializing scanner feed...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Audio element (hidden) -->
+                        <audio id="scanner-audio" style="display: none;" preload="none"></audio>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div class="footer-top">
+                <span>CLASSIFIED /// ORBITAL COMMAND</span>
+                <span>NODE: R510-ALPHA /// OMAHA SURVEILLANCE</span>
+                <span id="uptime">UPTIME: 00:00:00</span>
+            </div>
+            <div class="marquee-container">
+                <div class="marquee-content" id="news-marquee">
+                    <span class="marquee-item">LOADING NEWS FEED...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            FR24_URL: 'http://192.168.0.4/flights.js',
+            CAMERAS_URL: './cameras.json',
+            MAP_CENTER: [41.2565, -95.9345],
+            MAP_ZOOM: 11,
+            UPDATE_INTERVAL: 2000,
+            CRIME_CYCLE_INTERVAL: 12000,
+            CAMERA_REFRESH_INTERVAL: 12000,
+            // Omaha Police Scanner (Broadcastify)
+            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460',
+            WHISPER_API: 'http://192.168.0.169:8424/transcribe',
+            // OpenRouter API for 10-code explanations
+            OPENROUTER_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+            OPENROUTER_API_KEY: 'YOUR_KEY_HERE', // Will be injected from server
+            // Feature flags
+            ENABLE_AI_EXPLANATIONS: true,   // Translate police codes to plain English via OpenRouter
+            ENABLE_AI_LOCATION_TRACKING: false // Disabled: pans map/camera to transcript locations
+        };
+
+        let map, aircraftMarkers = {}, crimeMarkers = [], cameraMarkers = [];
+        let aircraft = [], crimeData = [], cameras = [];
+        let currentFocusedCrimeIndex = 0, currentCamera = null;
+        let scannerPlaying = false, scannerAudio = null, transcriptBuffer = [];
+        let scannerInterval = null; // Track the transcript interval
+        let cameraRefreshInterval = null;
+        let lastAICallTime = 0; // Rate limiting for AI calls
+        const AI_CALL_DELAY = 2000; // Minimum 2 seconds between AI calls
+        let lastLocationExtractTime = 0; // Rate limiting for location extraction
+        const LOCATION_EXTRACT_DELAY = 8000; // Extract location every 8 seconds max
+
+        function initMap() {
+            map = L.map('map', {
+                center: CONFIG.MAP_CENTER,
+                zoom: CONFIG.MAP_ZOOM,
+                zoomControl: true
+            });
+
+            // Use standard OSM tiles with dark filter
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OSM',
+                maxZoom: 19,
+                className: 'map-tiles-dark'
+            }).addTo(map);
+
+            addLog('info', 'OPENSTREETMAP INITIALIZED');
+
+            fetchAircraftData();
+            fetchCameras();
+
+            // Generate initial crime data and focus on first crime
+            try {
+                generateCrimeData();
+
+                // Make sure crime details show up after a brief delay
+                setTimeout(() => {
+                    try {
+                        if (crimeData.length > 0) {
+                            focusOnCrime(0);
+                        }
+                    } catch (err) {
+                        console.error('Error focusing on initial crime:', err);
+                    }
+                }, 1000);
+            } catch (err) {
+                console.error('Error generating crime data:', err);
+                addLog('error', 'CRIME DATA ERROR');
+            }
+        }
+
+        async function fetchCameras() {
+            try {
+                const response = await fetch('http://192.168.0.169:8422/cameras');
+                cameras = await response.json();
+
+                // Add camera markers to map
+                cameras.forEach(camera => {
+                    const icon = L.divIcon({
+                        html: '<div style="color: #F59E0B; font-size: 16px;">📹</div>',
+                        className: '',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    });
+
+                    const marker = L.marker([camera.lat, camera.lng], { icon }).addTo(map);
+                    marker.bindPopup(`
+                        <div style="font-family: monospace; font-size: 10px;">
+                            <strong style="color: #F59E0B;">${camera.name}</strong><br>
+                            Camera ID: ${camera.id}<br>
+                            <span style="color: #10b981;">● ONLINE</span>
+                        </div>
+                    `);
+                    cameraMarkers.push(marker);
+                });
+
+                if (cameras.length > 0) {
+                    // Wait a bit for DOM to be ready
+                    setTimeout(() => {
+                        try {
+                            switchCamera(cameras[0].id);
+                        } catch (err) {
+                            console.error('Error switching camera:', err);
+                            addLog('error', 'CAMERA SWITCH ERROR');
+                        }
+                    }, 500);
+                    addLog('info', `${cameras.length} CAMERAS ONLINE`);
+                }
+            } catch (error) {
+                console.error('Camera fetch error:', error);
+                addLog('error', 'CAMERA SYSTEM OFFLINE');
+
+                // Show placeholder in camera name
+                const nameEl = document.getElementById('active-camera-name');
+                if (nameEl) nameEl.textContent = 'OFFLINE';
+            }
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            // Haversine formula for distance in km
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function findNearestCamera(lat, lng) {
+            if (cameras.length === 0) return null;
+
+            let nearest = cameras[0];
+            let minDist = Infinity;
+
+            cameras.forEach(cam => {
+                const dist = calculateDistance(lat, lng, cam.lat, cam.lng);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = cam;
+                }
+            });
+
+            return { camera: nearest, distance: minDist };
+        }
+
+        function switchCamera(cameraId) {
+            currentCameraId = cameraId;
+            const camera = cameras.find(c => c.id === cameraId);
+
+            if (!camera) {
+                console.log('Camera not found:', cameraId);
+                return;
+            }
+
+            const nameElement = document.getElementById('active-camera-name');
+            if (nameElement) {
+                nameElement.textContent = camera.name;
+            }
+
+            // Load camera image
+            const timestamp = Date.now();
+            const imgElement = document.getElementById('camera-image');
+            if (!imgElement) {
+                console.error('Camera image element not found');
+                return;
+            }
+
+            try {
+                imgElement.src = `http://192.168.0.169:8422/camera?id=${cameraId}&t=${timestamp}`;
+
+                imgElement.onerror = function() {
+                    console.error(`Camera ${cameraId} failed to load`);
+                    // Don't hide, just leave previous image
+                };
+
+                imgElement.onload = function() {
+                    this.style.display = 'block';
+                };
+            } catch (err) {
+                console.error('Error loading camera image:', err);
+            }
+        }
+
+        function getSquawkColor(squawk) {
+            if (!squawk) return '#6ea87d';
+            if (['7500', '7600', '7700'].includes(squawk)) return '#c96c6c';
+            if (squawk === '1200') return '#6b9bc4';
+            return '#6ea87d';
+        }
+
+        function getSquawkClass(squawk) {
+            if (['7500', '7600', '7700'].includes(squawk)) return 'squawk-emergency';
+            if (squawk === '1200') return 'squawk-vfr';
+            return '';
+        }
+
+        function isEmergencySquawk(squawk) {
+            return squawk && ['7500', '7600', '7700'].includes(squawk);
+        }
+
+        function createAircraftIcon(color, rotation = 0, isEmergency = false) {
+            const emergencyPulse = isEmergency ? '<circle cx="8" cy="8" r="8" fill="#EF4444" opacity="0.3"><animate attributeName="r" from="4" to="12" dur="1.5s" repeatCount="indefinite" /><animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite" /></circle>' : '';
+
+            return L.divIcon({
+                html: `<svg width="24" height="24" viewBox="0 0 16 16">
+                    ${emergencyPulse}
+                    <g transform="rotate(${rotation} 8 8)">
+                        <path d="M 8 2 L 10 12 L 8 11 L 6 12 Z" fill="${color}" stroke="#000" stroke-width="0.5"/>
+                    </g>
+                </svg>`,
+                className: '',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        // Filter for emergency/official aircraft only
+        function isEmergencyAircraft(callsign, altitude) {
+            if (!callsign) return false;
+            callsign = callsign.trim().toUpperCase();
+
+            // Medical helicopters
+            if (callsign.includes('LIFE') || callsign.includes('MED') || callsign.includes('CARE')) return true;
+
+            // Military
+            if (callsign.match(/^(AF|ARMY|NAVY|USAF|USMC|USCG)/)) return true;
+
+            // Government (N-numbers often used by gov)
+            if (callsign.match(/^N[0-9]+/) && altitude < 10000) return true; // Low altitude N-numbers likely gov/police
+
+            // Police/Sheriff callsigns
+            if (callsign.includes('POLICE') || callsign.includes('SHERIFF') || callsign.includes('STATE')) return true;
+
+            // Emergency squawks
+            if (callsign.includes('7500') || callsign.includes('7600') || callsign.includes('7700')) return true;
+
+            return false;
+        }
+
+        async function fetchAircraftData() {
+            try {
+                const response = await fetch(CONFIG.FR24_URL);
+                const text = await response.text();
+
+                // Parse JSONP format: fr24_callback({...})
+                const jsonMatch = text.match(/fr24_callback\((.*)\)/);
+                if (!jsonMatch) {
+                    throw new Error('Invalid FR24 data format');
+                }
+
+                const data = JSON.parse(jsonMatch[1]);
+
+                // Convert FR24 format to aircraft objects
+                // FR24 format: {hex: [hex, lat, lng, heading, altitude, speed, ..., callsign]}
+                aircraft = Object.entries(data)
+                    .map(([hex, arr]) => {
+                        const [_, lat, lng, heading, altitude, speed, , , , , , , , , , , callsign] = arr;
+                        return {
+                            hex: hex,
+                            lat: lat || null,
+                            lon: lng || null,
+                            track: heading || 0,
+                            alt_baro: altitude || 0,
+                            gs: speed || 0,
+                            flight: callsign || hex,
+                            squawk: null
+                        };
+                    })
+                    .filter(ac => ac.lat && ac.lon) // Has position
+                    .filter(ac => isEmergencyAircraft(ac.flight, ac.alt_baro)) // Filter for emergency/gov only
+                    .map(ac => ({
+                        ...ac,
+                        color: '#EF4444', // Red for emergency aircraft
+                        squawkClass: 'emergency',
+                        isEmergency: true
+                    }));
+
+                updateAircraftMarkers();
+                updateFlightList();
+                document.getElementById('adsb-status').className = 'status-dot';
+            } catch (error) {
+                console.error('Aircraft fetch error:', error);
+                document.getElementById('adsb-status').className = 'status-dot offline';
+            }
+        }
+
+        function updateAircraftMarkers() {
+            try {
+                const currentHexes = new Set();
+
+                aircraft.forEach(ac => {
+                    if (!ac.lat || !ac.lon) return;
+                    currentHexes.add(ac.hex);
+
+                    if (aircraftMarkers[ac.hex]) {
+                        aircraftMarkers[ac.hex].setLatLng([ac.lat, ac.lon]);
+                        aircraftMarkers[ac.hex].setIcon(createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency));
+                    } else {
+                        const marker = L.marker([ac.lat, ac.lon], {
+                            icon: createAircraftIcon(ac.color, ac.track || 0, ac.isEmergency)
+                        }).addTo(map);
+
+                        const squawkInfo = ac.squawk ? `<br>Squawk: <strong style="color: ${ac.color};">${ac.squawk}</strong>` : '';
+                        marker.bindPopup(`
+                            <div style="font-family: monospace; font-size: 10px;">
+                                <strong style="color: ${ac.color};">${(ac.flight || ac.hex).trim()}</strong>${squawkInfo}<br>
+                                Alt: ${ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A'}<br>
+                                Speed: ${ac.gs ? Math.round(ac.gs) + 'kts' : 'N/A'}
+                            </div>
+                        `);
+
+                        aircraftMarkers[ac.hex] = marker;
+
+                        if (ac.isEmergency) {
+                            addLog('error', `EMERGENCY SQUAWK ${ac.squawk}: ${(ac.flight || ac.hex).trim()}`);
+                        }
+                    }
+                });
+
+                Object.keys(aircraftMarkers).forEach(hex => {
+                    if (!currentHexes.has(hex)) {
+                        map.removeLayer(aircraftMarkers[hex]);
+                        delete aircraftMarkers[hex];
+                    }
+                });
+            } catch (err) {
+                console.error('Aircraft marker update error:', err);
+                addLog('error', 'AIRCRAFT DISPLAY ERROR');
+            }
+        }
+
+        function updateFlightList() {
+            try {
+                const container = document.getElementById('flights');
+                if (!container) return;
+
+                const flightCount = document.getElementById('flight-count');
+                if (flightCount) {
+                    flightCount.textContent = aircraft.length;
+                }
+
+                if (aircraft.length === 0) {
+                    container.innerHTML = '<div style="color: #6b7280; padding: 10px; text-align: center;">NO AIRCRAFT</div>';
+                    return;
+                }
+
+                container.innerHTML = aircraft.slice(0, 20).map(ac => {
+                    const callsign = (ac.flight || ac.hex).trim();
+                    const alt = ac.alt_baro ? Math.round(ac.alt_baro) + 'ft' : 'N/A';
+                    return `
+                        <div class="flight-row">
+                            <div>
+                                <span class="flight-marker" style="background: ${ac.color};"></span>
+                                <span class="flight-callsign ${ac.squawkClass}">${callsign}</span>
+                            </div>
+                            <div style="color: #6b7280; font-size: 7px;">${alt}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Flight list update error:', err);
+                addLog('error', 'FLIGHT LIST ERROR');
+            }
+        }
+
+        const CRIME_TYPES = [
+            { type: 'ASSAULT', class: 'crime-assault', color: '#c96c6c', urgency: 10, urgencyLabel: 'HIGH' },
+            { type: 'ROBBERY', class: 'crime-robbery', color: '#d4a574', urgency: 9, urgencyLabel: 'HIGH' },
+            { type: 'BURGLARY', class: 'crime-burglary', color: '#9884c4', urgency: 7, urgencyLabel: 'MEDIUM' },
+            { type: 'THEFT', class: 'crime-theft', color: '#6b9bc4', urgency: 5, urgencyLabel: 'LOW' },
+            { type: 'VANDALISM', class: 'crime-vandalism', color: '#6eb3c4', urgency: 3, urgencyLabel: 'LOW' }
+        ];
+
+        const STREET_NAMES = ['DODGE', 'PACIFIC', 'FARNAM', 'CAPITOL', 'LEAVENWORTH', 'CUMING', 'CALIFORNIA', 'BURT'];
+
+        function generateCrimeData() {
+            try {
+                const previousHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+
+                crimeData = Array.from({ length: 12 }, () => {
+                    const crimeType = CRIME_TYPES[Math.floor(Math.random() * CRIME_TYPES.length)];
+                    const now = new Date();
+                    const minutesAgo = Math.floor(Math.random() * 120);
+                    const crimeTime = new Date(now - minutesAgo * 60000);
+
+                    return {
+                        ...crimeType,
+                        lat: CONFIG.MAP_CENTER[0] + (Math.random() - 0.5) * 0.1,
+                        lng: CONFIG.MAP_CENTER[1] + (Math.random() - 0.5) * 0.1,
+                        location: `${Math.floor(Math.random() * 9000 + 1000)} ${STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]} ST`,
+                        time: crimeTime.toLocaleTimeString(),
+                        minutesAgo: minutesAgo,
+                        status: minutesAgo < 30 ? 'ACTIVE' : 'LOGGED',
+                        units: Math.floor(Math.random() * 3) + 1,
+                        reportId: `R510-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+                    };
+                });
+
+                crimeData.sort((a, b) => b.urgency - a.urgency);
+
+                // Check if there's a new high-priority crime
+                const newHighPriority = crimeData.filter(c => c.urgency >= 9)[0];
+                const isNewCrime = !previousHighPriority ||
+                                   (newHighPriority && newHighPriority.reportId !== previousHighPriority.reportId);
+
+                updateCrimeMarkers();
+                updateCrimeList();
+
+                // Update crime status indicator
+                const crimeStatus = document.getElementById('crime-status');
+                if (crimeStatus) {
+                    crimeStatus.className = 'status-dot';
+                }
+
+                // Only focus if there's a NEW high-priority crime
+                if (isNewCrime && newHighPriority) {
+                    const newIndex = crimeData.findIndex(c => c.reportId === newHighPriority.reportId);
+                    if (newIndex !== -1) {
+                        focusOnCrime(newIndex);
+                        addLog('error', `NEW HIGH PRIORITY: ${newHighPriority.type} at ${newHighPriority.location}`);
+                    } else {
+                        // Fallback: just update details for current focused crime
+                        updateCrimeDetails();
+                    }
+                } else {
+                    // No new high priority, just update the details panel
+                    updateCrimeDetails();
+                }
+            } catch (err) {
+                console.error('Crime data generation error:', err);
+                addLog('error', 'CRIME DATA ERROR');
+                const crimeStatus = document.getElementById('crime-status');
+                if (crimeStatus) {
+                    crimeStatus.className = 'status-dot offline';
+                }
+            }
+        }
+
+        function updateCrimeMarkers() {
+            try {
+                crimeMarkers.forEach(m => map.removeLayer(m));
+                crimeMarkers = [];
+
+                crimeData.forEach((crime, idx) => {
+                    const icon = L.divIcon({
+                        html: `<div style="width: 12px; height: 12px; background: ${crime.color}; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 8px ${crime.color};" class="${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>`,
+                        className: '',
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
+                    });
+
+                    // Find nearest camera for popup
+                    const nearestCam = findNearestCamera(crime.lat, crime.lng);
+                    const cameraInfo = nearestCam ? `
+                        <div style="border-top: 1px solid #4a8fa0; margin-top: 6px; padding-top: 6px;">
+                            <div style="font-size: 9px; color: #6eb3c4; font-weight: bold; margin-bottom: 4px;">
+                                📹 NEAREST CAMERA
+                            </div>
+                            <img src="${nearestCam.camera.url}?t=${Date.now()}"
+                                 style="width: 200px; height: auto; border: 1px solid #4a8fa0; display: block; margin-bottom: 4px;"
+                                 onerror="this.style.display='none'"
+                                 alt="Camera feed">
+                            <div style="font-size: 8px; color: #7a8893;">
+                                ${nearestCam.camera.name}<br>
+                                ${nearestCam.distance < 1 ?
+                                    Math.round(nearestCam.distance * 1000) + 'm' :
+                                    nearestCam.distance.toFixed(1) + 'km'} from incident
+                            </div>
+                        </div>
+                    ` : '';
+
+                    const marker = L.marker([crime.lat, crime.lng], { icon }).addTo(map);
+                    marker.bindPopup(`
+                        <div style="font-family: monospace; font-size: 10px; background: #0f1419; padding: 8px; border: 1px solid #4a8fa0; border-radius: 4px; min-width: 200px;">
+                            <div style="margin-bottom: 6px;">
+                                <strong style="color: ${crime.color}; font-size: 11px;">${crime.type}</strong>
+                                <div style="display: inline-block; float: right; background: ${crime.urgency >= 7 ? '#c96c6c' : '#d4a574'}; color: #fff; padding: 2px 6px; border-radius: 2px; font-size: 7px;">
+                                    ${crime.urgencyLabel}
+                                </div>
+                            </div>
+                            <div style="color: #a8b2bc; line-height: 1.4;">
+                                📍 ${crime.location}<br>
+                                🕐 ${crime.time} (${crime.minutesAgo}m ago)<br>
+                                🆔 ${crime.reportId}<br>
+                                👮 ${crime.units} unit${crime.units > 1 ? 's' : ''}
+                            </div>
+                            ${cameraInfo}
+                        </div>
+                    `, {
+                        maxWidth: 220,
+                        className: 'custom-popup'
+                    });
+                    marker.on('click', () => focusOnCrime(idx));
+                    crimeMarkers.push(marker);
+                });
+            } catch (err) {
+                console.error('Crime marker update error:', err);
+                addLog('error', 'CRIME MARKERS ERROR');
+            }
+        }
+
+        function updateCrimeList() {
+            const container = document.getElementById('crime');
+            if (!container) {
+                console.error('Crime list container not found');
+                return;
+            }
+
+            const countElement = document.getElementById('crime-count');
+            if (countElement) {
+                countElement.textContent = crimeData.length;
+            }
+
+            container.innerHTML = crimeData.map((crime, idx) => `
+                <div class="crime-row ${idx === currentFocusedCrimeIndex ? 'focused' : ''}" onclick="focusOnCrime(${idx})">
+                    <div class="crime-marker ${crime.class} ${crime.urgency >= 7 ? 'crime-pulse' : ''}"></div>
+                    <div style="flex: 1;">
+                        <div style="color: ${crime.color}; font-weight: bold;">${crime.type}</div>
+                        <div style="color: #6b7280; font-size: 7px;">${crime.location} • ${crime.minutesAgo}m ago</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ====== CAMERA FUNCTIONS ======
+        async function loadCameras() {
+            try {
+                const response = await fetch(CONFIG.CAMERAS_URL);
+                const data = await response.json();
+                cameras = data.cameras || [];
+                console.log(`Loaded ${cameras.length} traffic cameras`);
+                addLog('info', `CAMERAS: ${cameras.length} loaded from DOT feeds`);
+            } catch (error) {
+                console.error('Failed to load cameras:', error);
+                addLog('error', 'CAMERA LOAD FAILED');
+            }
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            // Haversine formula for distance in km
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function findNearestCamera(lat, lng) {
+            if (cameras.length === 0) return null;
+
+            let nearest = null;
+            let minDistance = Infinity;
+
+            cameras.forEach(camera => {
+                const distance = calculateDistance(lat, lng, camera.lat, camera.lng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearest = { camera, distance };
+                }
+            });
+
+            return nearest;
+        }
+
+        function switchCamera(cameraId) {
+            const camera = cameras.find(c => c.id === cameraId);
+            if (!camera) {
+                console.error('Camera not found:', cameraId);
+                return;
+            }
+
+            currentCamera = camera;
+
+            // Update camera name
+            const nameEl = document.getElementById('camera-name');
+            if (nameEl) {
+                nameEl.textContent = camera.name;
+            }
+
+            // Clear refresh interval
+            if (cameraRefreshInterval) {
+                clearInterval(cameraRefreshInterval);
+            }
+
+            // Update camera feed
+            refreshCameraFeed();
+
+            // Auto-refresh every 12 seconds
+            cameraRefreshInterval = setInterval(refreshCameraFeed, CONFIG.CAMERA_REFRESH_INTERVAL);
+        }
+
+        function refreshCameraFeed() {
+            if (!currentCamera) return;
+
+            const imgEl = document.getElementById('camera-feed');
+            const statusEl = document.getElementById('camera-status');
+
+            if (!imgEl) return;
+
+            // Hide status message
+            if (statusEl) {
+                statusEl.style.display = 'none';
+            }
+
+            // Add cache-busting timestamp
+            const url = currentCamera.url + '?t=' + Date.now();
+            imgEl.src = url;
+            imgEl.style.display = 'block';
+        }
+
+        function updateCrimeDetails() {
+            const container = document.getElementById('crime-details');
+            if (!container) return;
+
+            const focusedCrime = crimeData[currentFocusedCrimeIndex];
+            if (!focusedCrime) return;
+
+            const nameElement = document.getElementById('focused-crime-name');
+            if (nameElement) {
+                nameElement.textContent = focusedCrime.type;
+            }
+
+            container.innerHTML = `
+                <div class="crime-detail-card focused">
+                    <div class="crime-detail-header">
+                        <div class="crime-detail-type" style="color: ${focusedCrime.color};">
+                            <div class="crime-marker ${focusedCrime.class}"></div>
+                            ${focusedCrime.type}
+                        </div>
+                        <div class="crime-detail-urgency ${focusedCrime.urgencyLabel.toLowerCase()}">${focusedCrime.urgencyLabel} PRIORITY</div>
+                    </div>
+                    <div class="crime-detail-info">
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">REPORT ID:</span>
+                            <span>${focusedCrime.reportId}</span>
+                        </div>
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">LOCATION:</span>
+                            <span>${focusedCrime.location}</span>
+                        </div>
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">TIME:</span>
+                            <span>${focusedCrime.time} (${focusedCrime.minutesAgo} minutes ago)</span>
+                        </div>
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">STATUS:</span>
+                            <span style="color: ${focusedCrime.status === 'ACTIVE' ? '#EF4444' : '#10b981'};">${focusedCrime.status}</span>
+                        </div>
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">UNITS:</span>
+                            <span>${focusedCrime.units} dispatched</span>
+                        </div>
+                        <div class="crime-detail-row">
+                            <span class="crime-detail-label">COORD:</span>
+                            <span style="font-family: monospace; font-size: 7px;">${focusedCrime.lat.toFixed(5)}, ${focusedCrime.lng.toFixed(5)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function focusOnCrime(index) {
+            try {
+                currentFocusedCrimeIndex = index;
+                const crime = crimeData[index];
+
+                if (!crime) {
+                    console.error('Crime not found at index:', index);
+                    return;
+                }
+
+                map.setView([crime.lat, crime.lng], 14, { animate: true });
+                if (crimeMarkers[index]) {
+                    crimeMarkers[index].openPopup();
+                }
+
+                // Switch to nearest camera
+                const nearest = findNearestCamera(crime.lat, crime.lng);
+                if (nearest) {
+                    try {
+                        switchCamera(nearest.camera.id);
+                        const distanceText = nearest.distance < 1 ?
+                            `${Math.round(nearest.distance * 1000)}m from incident` :
+                            `${nearest.distance.toFixed(1)}km from incident`;
+                        const distElement = document.getElementById('camera-distance');
+                        if (distElement) {
+                            // Highlight distant cameras (>2km)
+                            if (nearest.distance > 2) {
+                                distElement.style.color = '#d4a574'; // Orange for distant
+                                distElement.textContent = `⚠️ DISTANT: ${distanceText}`;
+                            } else {
+                                distElement.style.color = '#6eb3c4'; // Normal cyan
+                                distElement.textContent = distanceText;
+                            }
+                        }
+                        addLog('info', `CAM: ${nearest.camera.name} (${distanceText})`);
+                    } catch (err) {
+                        console.error('Error switching to nearest camera:', err);
+                    }
+                }
+
+                updateCrimeList();
+                updateCrimeDetails();
+                addLog('warn', `CRIME: ${crime.type} at ${crime.location}`);
+            } catch (err) {
+                console.error('Error in focusOnCrime:', err);
+                addLog('error', 'CRIME FOCUS ERROR');
+            }
+        }
+
+        function updateTelemetry() {
+            // Telemetry panel removed - stub function for compatibility
+            return;
+        }
+
+        const logBuffer = [];
+        function addLog(level, message) {
+            // Logs panel removed - just console log for debugging
+            console.log(`[${level.toUpperCase()}] ${message}`);
+        }
+
+        let uptimeSeconds = 0;
+
+        function updateTimestamp() {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            uptimeSeconds++;
+            const h = Math.floor(uptimeSeconds / 3600);
+            const m = Math.floor((uptimeSeconds % 3600) / 60);
+            const s = uptimeSeconds % 60;
+            document.getElementById('uptime').textContent = `UPTIME: ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        async function fetchNewsMarquee() {
+            const marquee = document.getElementById('news-marquee');
+            if (!marquee) return;
+
+            try {
+                const response = await fetch('http://192.168.0.169:8423/feeds', {
+                    timeout: 5000
+                });
+                const data = await response.json();
+
+                if (data.items && data.items.length > 0) {
+                    marquee.innerHTML = data.items.map(item => {
+                        const type = item.type === 'news' ? 'news' : 'general';
+                        const color = type === 'news' ? 'traffic' : '';
+                        return `<span class="marquee-item ${color}">【${type.toUpperCase()}】${item.title}</span>`;
+                    }).join('');
+                    console.log(`News feed loaded: ${data.items.length} items`);
+                } else {
+                    // Fallback to static news items
+                    console.warn('RSS feed returned no items, using fallback');
+                    showFallbackNews(marquee);
+                }
+            } catch (error) {
+                console.error('News feed error:', error);
+                // Show fallback news instead of error message
+                showFallbackNews(marquee);
+            }
+        }
+
+        function showFallbackNews(marquee) {
+            const fallbackItems = [
+                { type: 'STATUS', text: 'R510 COMMAND CENTER - ORBITAL NODE-01 - ALL SYSTEMS OPERATIONAL', color: 'traffic' },
+                { type: 'CRIME', text: 'Active incident monitoring: 12 crimes tracked in Omaha metro area', color: 'crime' },
+                { type: 'AIRCRAFT', text: 'Emergency aircraft tracking active - Medical/Military/Police only', color: 'traffic' },
+                { type: 'CAMERA', text: '82 live traffic cameras online - NDOT, Iowa DOT, WOWT feeds operational', color: '' },
+                { type: 'SCANNER', text: 'Omaha Police Scanner - Broadcastify feed streaming on OPD MAIN talkgroup', color: 'crime' },
+                { type: 'SYSTEM', text: 'AI translation enabled - Police codes converted to civilian language', color: 'traffic' },
+                { type: 'STATUS', text: 'Geographic coverage: Douglas County, Sarpy County, Pottawattamie County', color: '' },
+                { type: 'INFO', text: 'Data sources: SpotCrime API, OpenSky Network, OpenStreetMap, Broadcastify', color: 'traffic' }
+            ];
+
+            marquee.innerHTML = fallbackItems.map(item =>
+                `<span class="marquee-item ${item.color}">【${item.type}】${item.text}</span>`
+            ).join('');
+            console.log('Fallback news displayed');
+        }
+
+        addLog('info', 'R510 COMMAND CENTER INITIALIZED');
+        addLog('info', 'CRIME SURVEILLANCE ACTIVE');
+
+        // Initialize map immediately
+        initMap();
+
+        // Load traffic cameras
+        loadCameras();
+
+        // Fetch news after a delay to let everything load
+        setTimeout(fetchNewsMarquee, 2000);
+
+        // Auto-start police scanner (no button needed)
+        setTimeout(() => {
+            try {
+                console.log('=== SCANNER INIT START ===');
+                console.log('Checking for scanner-transcript element...');
+                const container = document.getElementById('scanner-transcript');
+                if (!container) {
+                    console.error('CRITICAL ERROR: scanner-transcript element not found in DOM!');
+                    console.log('Available IDs:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                    // Show error on screen
+                    document.body.insertAdjacentHTML('beforeend',
+                        '<div style="position: fixed; top: 50%; right: 20px; background: red; color: white; padding: 20px; z-index: 9999; font-size: 16px; max-width: 300px;">TRANSCRIPT PANEL ERROR: Container not found in DOM</div>'
+                    );
+                } else {
+                    console.log('✓ Scanner transcript container found');
+                    console.log('Starting scanner...');
+                    startScanner();
+                    console.log('✓ Scanner started successfully');
+                }
+            } catch (err) {
+                console.error('Scanner auto-start FATAL error:', err);
+                console.error('Stack trace:', err.stack);
+                // Show error on screen
+                document.body.insertAdjacentHTML('beforeend',
+                    `<div style="position: fixed; top: 50%; right: 20px; background: red; color: white; padding: 20px; z-index: 9999; font-size: 14px; max-width: 300px;">SCANNER ERROR: ${err.message}</div>`
+                );
+            }
+        }, 2000);
+
+        // Isolated panel updates - each wrapped to prevent crashes
+        setInterval(() => {
+            try {
+                fetchAircraftData();
+            } catch (err) {
+                console.error('Aircraft fetch error:', err);
+                addLog('error', 'AIRCRAFT UPDATE FAILED');
+            }
+        }, CONFIG.UPDATE_INTERVAL);
+
+        setInterval(() => {
+            try {
+                updateTimestamp();
+            } catch (err) {
+                console.error('Timestamp update error:', err);
+            }
+        }, 1000);
+
+        // Telemetry panel removed - no longer needed
+        // setInterval(() => {
+        //     try {
+        //         updateTelemetry();
+        //     } catch (err) {
+        //         console.error('Telemetry update error:', err);
+        //         addLog('error', 'TELEMETRY UPDATE FAILED');
+        //     }
+        // }, 3000);
+        setInterval(() => {
+            try {
+                generateCrimeData();
+                addLog('info', 'CRIME DATA REFRESH');
+            } catch (err) {
+                console.error('Error in crime data refresh:', err);
+            }
+        }, 60000);
+        setInterval(() => {
+            fetchNewsMarquee();
+            addLog('info', 'NEWS FEED REFRESH');
+        }, 300000); // Refresh news every 5 minutes
+        setInterval(() => {
+            try {
+                if (currentCameraId && cameras.length > 0) {
+                    switchCamera(currentCameraId); // Refresh current camera image
+                }
+            } catch (err) {
+                console.error('Error refreshing camera:', err);
+            }
+        }, 30000); // Refresh camera every 30 seconds
+
+        setTimeout(() => addLog('info', 'ADS-B ONLINE (OPENSKY NETWORK)'), 2000);
+        setTimeout(() => addLog('warn', 'SHAGGOTH-A1 OFFLINE'), 3000);
+
+        // Police Scanner Functions
+        function startScanner() {
+            try {
+                // Clear any existing interval first
+                if (scannerInterval) {
+                    clearInterval(scannerInterval);
+                    scannerInterval = null;
+                }
+
+                // Mark as playing
+                scannerPlaying = true;
+
+                // Update status
+                const statusSpan = document.getElementById('scanner-status');
+                if (statusSpan) {
+                    statusSpan.textContent = 'LIVE';
+                    statusSpan.style.color = '#c96c6c';
+                }
+
+                // Try to play audio; real status updates come from the transcription pipeline
+                scannerAudio = scannerAudio || document.getElementById('scanner-audio');
+                if (scannerAudio) {
+                    scannerAudio.src = CONFIG.SCANNER_STREAM;
+                    scannerAudio.load();
+                    scannerAudio.play().then(() => {
+                        console.log('Scanner audio started');
+                        addLog('info', 'POLICE SCANNER: AUDIO STREAM CONNECTED');
+                    }).catch(err => {
+                        console.log('Scanner audio unreachable:', err.name || err.message);
+                        addLog('warn', 'POLICE SCANNER: AUDIO UNREACHABLE - CHECK RADIO SOURCE');
+                    });
+                }
+
+                // Start transcription
+                startTranscription();
+            } catch (err) {
+                console.error('Scanner start error:', err);
+                addLog('error', 'SCANNER ERROR: ' + err.message);
+            }
+        }
+
+        function toggleScanner() {
+            // Legacy function for compatibility
+            if (!scannerPlaying) {
+                startScanner();
+            }
+        }
+
+        // Local 10-code dictionary (fallback when AI API is unavailable)
+        const TEN_CODES = {
+            '10-1': 'radio signal is weak', '10-2': 'signal is good', '10-4': 'acknowledged / okay',
+            '10-6': 'busy', '10-7': 'out of service', '10-8': 'in service / available',
+            '10-9': 'please repeat that', '10-10': 'fight in progress', '10-15': 'prisoner in custody',
+            '10-20': 'reporting a location', '10-21': 'call by phone', '10-22': 'disregard that',
+            '10-23': 'arrived at the scene', '10-27': 'checking vehicle registration',
+            '10-28': 'running a check on a license plate', '10-29': 'running a warrant check on a person',
+            '10-31': 'crime in progress', '10-32': 'armed person or weapons involved',
+            '10-39': 'urgent, lights and siren', '10-50': 'vehicle accident', '10-51': 'tow truck needed',
+            '10-53': 'road is blocked', '10-54': 'animal call', '10-62': 'burglary / break-in',
+            '10-65': 'theft / larceny', '10-66': 'suspicious person', '10-67': 'suspicious vehicle',
+            '10-69': 'call cancelled', '10-70': 'fire reported', '10-75': 'in contact with',
+            '10-76': 'on the way to the location', '10-78': 'officer needs assistance',
+            '10-80': 'police pursuit', '10-84': 'meeting up', '10-85': 'delay / hold',
+            '10-91': 'person needing attention', '10-91D': 'mentally or emotionally disturbed person',
+            '10-92': 'improperly parked vehicle', '10-94': 'drag racing', '10-95': 'escorting a prisoner',
+            '10-96': 'mental health call', '10-97': 'officer arrived on scene',
+            '10-98': 'assignment completed', '10-99': 'officer needs help urgently'
+        };
+
+        // Turn raw police chatter into a plain-English summary (no network needed)
+        function civilianExplanation(message) {
+            try {
+                const m = String(message).toUpperCase();
+                const meanings = [];
+                for (const [code, meaning] of Object.entries(TEN_CODES)) {
+                    if (m.includes(code)) meanings.push(`${code} = ${meaning}`);
+                }
+                const action =
+                    /RESPONDING|EN ROUTE/.test(m) ? 'A unit is heading to the scene. ' :
+                    /10-97|ON SCENE|ARRIVED/.test(m) ? 'A unit is on scene. ' :
+                    /BACKUP/.test(m) ? 'Officers are requesting backup. ' :
+                    /REQUESTING SUPERVISOR/.test(m) ? 'A supervisor is being called in. ' :
+                    /PURSUIT/.test(m) ? 'Police chase is in progress. ' :
+                    /DISABLE D|TRAFFIC STOP|10-28/.test(m) ? 'Officers are checking someone during a traffic stop. ' : '';
+                const detail = meanings.length
+                    ? `What you heard: ${meanings.join('; ')}.`
+                    : 'Normal police radio traffic.';
+                return `${action}${detail}`;
+            } catch (err) {
+                return null;
+            }
+        }
+
+        // Translate police jargon to civilian language using AI
+        async function translateDispatch(message) {
+            try {
+                // Rate limiting: Don't call API more than once every 2 seconds
+                const now = Date.now();
+                if (now - lastAICallTime < AI_CALL_DELAY) {
+                    console.log(`Translation skipped (rate limited), using local decode`);
+                    return civilianExplanation(message);
+                }
+                lastAICallTime = now;
+
+                console.log(`Translating: "${message.substring(0, 50)}..."`);
+
+                // Create abort controller with 5 second timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(CONFIG.OPENROUTER_API_URL, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${CONFIG.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'R510 Command Center'
+                    },
+                    body: JSON.stringify({
+                        model: 'openai/gpt-4o-mini',
+                        messages: [{
+                            role: 'user',
+                            content: `Translate this police dispatch message into plain civilian English. Keep it concise (1 sentence): "${message}"`
+                        }],
+                        max_tokens: 60
+                    })
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.warn(`OpenRouter API error (${response.status}):`, errorText);
+                    return civilianExplanation(message);
+                }
+
+                const data = await response.json();
+                const translation = data.choices[0].message.content.trim();
+                console.log(`Translation: ${translation}`);
+                return translation;
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.warn(`Translation timed out (5s), using local decode`);
+                } else {
+                    console.warn(`Translation error:`, err.message, `using local decode`);
+                }
+                return civilianExplanation(message);
+            }
+        }
+
+        // Extract location from transcript using AI
+        async function extractLocation(message) {
+            try {
+                // Rate limiting
+                const now = Date.now();
+                if (now - lastLocationExtractTime < LOCATION_EXTRACT_DELAY) {
+                    return null;
+                }
+                lastLocationExtractTime = now;
+
+                console.log('Extracting location from transcript...');
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(CONFIG.OPENROUTER_API_URL, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${CONFIG.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'R510 Command Center'
+                    },
+                    body: JSON.stringify({
+                        model: 'openai/gpt-4o-mini',
+                        messages: [{
+                            role: 'user',
+                            content: `Extract ONLY the street address or intersection from this police dispatch message. Return ONLY the address in "Street Name, Omaha, NE" format, or "NONE" if no address is mentioned: "${message}"`
+                        }],
+                        max_tokens: 30
+                    })
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) return null;
+
+                const data = await response.json();
+                const address = data.choices[0].message.content.trim();
+
+                if (address === 'NONE' || !address.includes('Omaha')) {
+                    return null;
+                }
+
+                console.log(`Extracted address: ${address}`);
+                return address;
+            } catch (err) {
+                console.warn('Location extraction error:', err.message);
+                return null;
+            }
+        }
+
+        // Geocode address to lat/lng using Nominatim (OSM)
+        async function geocodeAddress(address) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+                    {
+                        signal: controller.signal,
+                        headers: {
+                            'User-Agent': 'R510-Command-Center'
+                        }
+                    }
+                );
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) return null;
+
+                const data = await response.json();
+                if (data.length === 0) return null;
+
+                const result = {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon),
+                    displayName: data[0].display_name
+                };
+
+                console.log(`Geocoded: ${result.displayName}`);
+                return result;
+            } catch (err) {
+                console.warn('Geocoding error:', err.message);
+                return null;
+            }
+        }
+
+        // Update map and camera based on transcript location
+        async function updateFromTranscript(message) {
+            // Defensive: ensure this never crashes the transcript panel
+            if (!message || typeof message !== 'string') {
+                console.warn('Invalid message for location extraction');
+                return;
+            }
+
+            try {
+                // Extract location from transcript
+                const address = await extractLocation(message);
+                if (!address) return;
+
+                // Geocode to coordinates
+                const location = await geocodeAddress(address);
+                if (!location) return;
+
+                console.log(`📍 Location detected: ${location.lat}, ${location.lng}`);
+
+                // Pan map to location
+                if (map) {
+                    map.setView([location.lat, location.lng], 15);
+
+                    // Add temporary marker
+                    const marker = L.marker([location.lat, location.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: '<div style="background: #c96c6c; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>',
+                            iconSize: [12, 12]
+                        })
+                    }).addTo(map);
+
+                    // Remove marker after 20 seconds
+                    setTimeout(() => marker.remove(), 20000);
+                }
+
+                // Find and switch to nearest camera
+                const nearest = findNearestCamera(location.lat, location.lng);
+                if (nearest) {
+                    switchCamera(nearest.camera.id);
+                    const distanceText = nearest.distance < 1 ?
+                        `${Math.round(nearest.distance * 1000)}m from incident` :
+                        `${nearest.distance.toFixed(1)}km from incident`;
+                    const distElement = document.getElementById('camera-distance');
+                    if (distElement) {
+                        if (nearest.distance > 2) {
+                            distElement.style.color = '#d4a574';
+                            distElement.textContent = `⚠️ DISTANT: ${distanceText}`;
+                        } else {
+                            distElement.style.color = '#6eb3c4';
+                            distElement.textContent = distanceText;
+                        }
+                    }
+                    addLog('info', `📍 AUTO: ${address.split(',')[0]} -> ${nearest.camera.name}`);
+                }
+
+                // Update focused crime name to show transcript location
+                const nameElement = document.getElementById('focused-crime-name');
+                if (nameElement) {
+                    nameElement.textContent = `SCANNER: ${address.split(',')[0].toUpperCase()}`;
+                }
+            } catch (err) {
+                console.warn('Transcript location update error:', err.message);
+            }
+        }
+
+function startTranscription() {
+            console.log('=== startTranscription() (REAL PIPELINE) ===');
+            try {
+                const container = document.getElementById('scanner-transcript');
+                if (!container) {
+                    const errorMsg = 'FATAL: scanner-transcript element not found in startTranscription';
+                    console.error(errorMsg);
+                    document.body.insertAdjacentHTML('beforeend',
+                        `<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: red; color: white; padding: 20px; z-index: 9999; font-size: 20px;">${errorMsg}</div>`
+                    );
+                    return;
+                }
+
+                // Live header - no simulated entries, only real ones
+                container.innerHTML = '<div style="color: #6eb3c4; font-weight: bold; border-bottom: 1px solid #4a8fa0; padding-bottom: 4px; margin-bottom: 4px;">LIVE TRANSCRIPT - REAL-TIME</div>';
+
+                const pollUrl = CONFIG.WHISPER_API.replace(/\/transcribe$/, '') + '/transcripts';
+                const baseUrl = CONFIG.WHISPER_API.replace(/\/transcribe$/, '');
+                let since = 0;
+                let lastEntryAt = 0;
+
+                function setStatus(mode) {
+                    try {
+                        const statusSpan = document.getElementById('scanner-status');
+                        if (!statusSpan) return;
+                        if (mode === 'live') {
+                            statusSpan.textContent = 'LIVE';
+                            statusSpan.style.color = '#6eb3c4';
+                            removeNotice();
+                        } else if (mode === 'signal') {
+                            statusSpan.textContent = 'SIGNAL LOST';
+                            statusSpan.style.color = '#c96c6c';
+                            showNotice('NO RADIO SIGNAL - WAITING FOR FEED', '#c96c6c');
+                        } else if (mode === 'stt') {
+                            statusSpan.textContent = 'WAITING FOR STT';
+                            statusSpan.style.color = '#d4a574';
+                        }
+                    } catch (err) { console.warn('status set failed', err.message); }
+                }
+
+                function showNotice(text, color) {
+                    try {
+                        let n = container.querySelector('#signal-notice');
+                        if (!n) {
+                            n = document.createElement('div');
+                            n.id = 'signal-notice';
+                            n.style.cssText = 'padding:10px;font-size:14px;font-weight:bold;color:#c96c6c;border:1px dashed #c96c6c;border-radius:3px;margin-bottom:6px;';
+                            container.insertBefore(n, container.children[1] || null);
+                        }
+                        n.textContent = text;
+                        if (color) n.style.color = color;
+                    } catch (err) {}
+                }
+
+                function removeNotice() {
+                    try {
+                        const n = container.querySelector('#signal-notice');
+                        if (n) n.remove();
+                    } catch (err) {}
+                }
+
+                function appendTranscriptEntry(text) {
+                    const now = new Date();
+                    const timeStr = now.toLocaleTimeString();
+                    const safe = String(text).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+                    const entry = document.createElement('div');
+                    entry.style.cssText = 'padding: 8px 10px; background: rgba(110, 179, 196, 0.05); margin-bottom: 6px; border-left: 3px solid #6eb3c4; border-radius: 2px;';
+                    entry.innerHTML = `
+                        <div style="color: #6eb3c4; font-size: 14px; font-weight: bold; margin-bottom: 4px;">[${timeStr}] RADIO</div>
+                        <div style="color: #a8b2bc; font-size: 15px; line-height: 1.5;">${safe}</div>
+                        <div class="ai-explanation" style="color: #c96c6c; font-size: 13px; margin-top: 4px; font-style: italic;"></div>`;
+                    container.appendChild(entry);
+                    lastEntryAt = Date.now();
+                    setStatus('live');
+                    transcriptBuffer.push({ time: timeStr, unit: 'RADIO', msg: text });
+
+                    if (CONFIG.ENABLE_AI_EXPLANATIONS) {
+                        try {
+                            translateDispatch(text).then(t => {
+                                const ex = entry.querySelector('.ai-explanation');
+                                if (ex && t) ex.textContent = '🚨 ' + t;
+                            }).catch(() => {});
+                        } catch (err) {}
+                    }
+                    if (CONFIG.ENABLE_AI_LOCATION_TRACKING) {
+                        setTimeout(() => {
+                            try { updateFromTranscript(text).catch(() => {}); } catch (err) {}
+                        }, 50);
+                    }
+                    while (container.children.length > 51) container.removeChild(container.children[1]);
+                    const tc = document.getElementById('scanner-transcript-container');
+                    if (tc) tc.scrollTop = tc.scrollHeight;
+                    if (/10-91|10-32/i.test(text)) addLog('warn', 'SCANNER: ' + text.substring(0, 40) + '...');
+                }
+
+                function pollTranscripts() {
+                    fetch(pollUrl + '?since=' + since, { signal: AbortSignal.timeout(6000) })
+                        .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+                        .then(data => {
+                            if (data.entries && data.entries.length) {
+                                for (const entry of data.entries) {
+                                    if (entry.seq > since) {
+                                        since = entry.seq;
+                                        appendTranscriptEntry(entry.text);
+                                    }
+                                }
+                            }
+                        })
+                        .catch(err => {
+                            if (console._warnOnce !== pollUrl) { console._warnOnce = pollUrl; console.warn('Whisper poll failed:', err.message); }
+                            setStatus('stt');
+                        });
+                }
+
+                function setupAudioCapture() {
+                    if (!scannerAudio || window.__r510CaptureDone) return;
+                    window.__r510CaptureDone = true;
+                    try {
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioCtx || !window.MediaRecorder) {
+                            console.warn('Audio capture not available in this browser');
+                            return;
+                        }
+                        const ctx = new AudioCtx();
+                        const src = ctx.createMediaElementSource(scannerAudio);
+                        const dest = ctx.createMediaStreamDestination();
+                        src.connect(dest);
+                        src.connect(ctx.destination);
+                        const rec = new MediaRecorder(dest.stream, { mimeType: 'audio/webm;codecs=opus' });
+                        rec.ondataavailable = (ev) => {
+                            if (!ev.data || ev.data.size < 4000) return;
+                            const fd = new FormData();
+                            fd.append('audio', ev.data, 'chunk.webm');
+                            fetch(CONFIG.WHISPER_API + '?language=en', { method: 'POST', body: fd })
+                                .then(r => { if (!r.ok) throw new Error('STT ' + r.status); })
+                                .catch(err => { console.warn('STT post failed:', err.message); });
+                        };
+                        rec.start(6000);
+                        console.log('Audio capture started (MediaRecorder)');
+                    } catch (err) {
+                        console.warn('Audio capture setup error:', err.message);
+                    }
+                }
+
+                function watchAudio() {
+                    if (!scannerAudio) return;
+                    scannerAudio.onerror = () => setStatus('signal');
+                    scannerAudio.onstalled = () => {};
+                    scannerAudio.onplaying = () => setStatus('live');
+                    scannerAudio.onwaiting = () => {};
+                }
+
+                // Retry the stream periodically in case the feed comes back
+                if (!window.__r510RetryTimer) {
+                    window.__r510RetryTimer = setInterval(() => {
+                        try {
+                            if (scannerAudio && scannerAudio.error) {
+                                scannerAudio.load();
+                                scannerAudio.play().catch(() => {});
+                            }
+                        } catch (err) {}
+                    }, 15000);
+                }
+
+                setupAudioCapture();
+                watchAudio();
+
+                // Whisper server heartbeats
+                fetch(baseUrl + '/status', { signal: AbortSignal.timeout(4000) })
+                    .then(r => r.json())
+                    .then(s => {
+                        if (s && s.stream_alive) setStatus('live');
+                        if (s && !s.stream_alive && s.stream) setStatus('signal');
+                    })
+                    .catch(err => { console.warn('Whisper status check failed:', err.message); });
+
+                // Poll the transcript buffer every 4 seconds
+                pollTranscripts();
+                scannerInterval = setInterval(pollTranscripts, 4000);
+                console.log('Real transcription pipeline started (poll: ' + pollUrl + ')');
+            } catch (err) {
+                console.error('Start transcription error:', err);
+                addLog('error', 'SCANNER START ERROR: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>

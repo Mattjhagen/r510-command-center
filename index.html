@@ -556,12 +556,14 @@
             overflow: hidden;
             position: relative;
             flex: 1;
-            min-height: 0;
+            min-height: 108px;
+            height: 108px;
         }
 
         .cam-tile {
             min-width: 192px;
             width: 192px;
+            height: 108px;
             flex: 0 0 192px;
             border: 1px solid #4a8fa0;
             background: #000;
@@ -805,7 +807,8 @@
             MAP_CENTER: [41.2565, -95.9345],
             MAP_ZOOM: 11,
             UPDATE_INTERVAL: 2000,
-            SCANNER_STREAM: 'https://broadcastify.cdnstream1.com/25460',
+            SCANNER_STREAM: 'http://192.168.0.169:8898/live',
+            WHISPER_API: 'http://localhost:8424/transcribe',
             CRIME_JSON_URL: 'crime.json',
             CRIME_REFRESH_MS: 600000
         };
@@ -1348,8 +1351,8 @@
         let transcriptBuffer = [];
         let transcriptIndex = 0;
 
-        function startTranscription() {
-            console.log('startTranscription() called');
+function startTranscription() {
+            console.log('startTranscription() called (real pipeline)');
             try {
                 const container = safeGet('scanner-transcript');
                 if (!container) {
@@ -1358,38 +1361,28 @@
                 }
                 console.log('Container found:', container.id);
 
-                const transcripts = [
-                    { unit: 'UNIT 214', msg: 'Responding to 4200 Dodge Street, possible 10-91D' },
-                    { unit: 'DISPATCH', msg: 'Copy that 214, backup en route' },
-                    { unit: 'UNIT 189', msg: '10-97, ETA 3 minutes' },
-                    { unit: 'UNIT 214', msg: '10-23, scene secure' },
-                    { unit: 'UNIT 214', msg: 'Requesting supervisor, possible 10-32' },
-                    { unit: 'SGT 05', msg: '10-76 to your location' },
-                    { unit: 'UNIT 189', msg: '10-97 on scene' },
-                    { unit: 'DISPATCH', msg: 'All units advised, suspect vehicle westbound on Dodge' }
-                ];
-
-                // Clear buffer and index
+                // Clear buffer and any existing interval
                 transcriptBuffer = [];
                 transcriptIndex = 0;
-
-                // Clear any existing interval
                 if (transcriptInterval) {
-                    console.log('Clearing existing interval');
                     clearInterval(transcriptInterval);
                     transcriptInterval = null;
                 }
+
+                const baseUrl = (CONFIG.WHISPER_API || '').replace(/\/transcribe$/, '');
+                if (!baseUrl) {
+                    console.error('No WHISPER_API configured');
+                    container.innerHTML = '<div style="color: #c96c6c; padding: 10px; text-align: center;">WHISPER API NOT CONFIGURED</div>';
+                    return;
+                }
+                let since = 0;
+                let pollFailures = 0;
 
                 // Function to render ALL transcripts at once
                 function renderTranscripts() {
                     try {
                         const c = safeGet('scanner-transcript');
-                        if (!c) {
-                            console.error('Container disappeared');
-                            return;
-                        }
-
-                        // Build HTML string (safe, no DOM manipulation)
+                        if (!c) return;
                         const html = transcriptBuffer.map(item => `
                             <div class="transcript-entry">
                                 <div>
@@ -1399,91 +1392,126 @@
                                 <div class="transcript-msg">${item.msg}</div>
                             </div>
                         `).join('');
-
-                        // Set innerHTML once (much safer than appendChild)
-                        c.innerHTML = html;
-
-                        // Safe scroll
-                        try {
-                            if (c.scrollTop !== undefined) {
-                                c.scrollTop = c.scrollHeight || 99999;
-                            }
-                        } catch (e) {
-                            console.warn('Scroll failed:', e);
-                        }
+                        c.innerHTML = html || '<div style="color: #6eb3c4; padding: 10px; text-align: center;">Waiting for radio feed...</div>';
+                        try { c.scrollTop = c.scrollHeight || 99999; } catch (e) {}
                     } catch (err) {
                         console.error('renderTranscripts error:', err);
                     }
                 }
 
-                // Function to add transcript to buffer
-                function addTranscript() {
-                    console.log('addTranscript() called, index:', transcriptIndex);
+                function pushReal(text) {
+                    const t = String(text || '').trim();
+                    if (!t || !/[a-zA-Z]{3,}/.test(t)) return;
+                    const timeStr = new Date().toLocaleTimeString();
+                    const safe = t.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+                    transcriptBuffer.push({ time: timeStr, unit: 'RADIO', msg: safe });
+                    if (transcriptBuffer.length > 20) transcriptBuffer.shift();
+                    renderTranscripts();
+                    if (/10-91|10-32/i.test(t)) addLog('warn', 'SCANNER: ' + t.substring(0, 40));
+                }
+
+                function pollTranscripts() {
+                    fetch(baseUrl + '/transcripts?since=' + since, { signal: AbortSignal.timeout(6000) })
+                        .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+                        .then(data => {
+                            const wasOffline = pollFailures >= 3;
+                            pollFailures = 0;
+                            if (!scannerPlaying) return;
+                            if (wasOffline) {
+                                const s = safeGet('scanner-status');
+                                if (s) { s.textContent = 'LIVE'; s.style.color = '#c96c6c'; }
+                            }
+                            if (data.entries && data.entries.length) {
+                                for (const entry of data.entries) {
+                                    if (entry.seq > since) {
+                                        since = entry.seq;
+                                        pushReal(entry.text);
+                                    }
+                                }
+                            } else {
+                                renderTranscripts();
+                            }
+                        })
+                        .catch(err => {
+                            pollFailures++;
+                            console.warn('Whisper poll failed:', err.message);
+                            try {
+                                if (pollFailures >= 3) {
+                                    const c = safeGet('scanner-transcript');
+                                    const s = safeGet('scanner-status');
+                                    if (c) c.innerHTML = '<div style="color: #c96c6c; padding: 10px; text-align: center;">TRANSCRIPT FEED OFFLINE - RETRYING...</div>';
+                                    if (s) { s.textContent = 'RECONNECTING'; s.style.color = '#d4a574'; }
+                                }
+                            } catch (e) {}
+                        });
+                }
+
+                function setPanelStatus(mode) {
+                    const s = safeGet('scanner-status');
+                    if (!s) return;
+                    if (mode === 'live') { s.textContent = 'LIVE'; s.style.color = '#c96c6c'; }
+                    else if (mode === 'signal') { s.textContent = 'SIGNAL LOST'; s.style.color = '#7a8893'; }
+                    else if (mode === 'stt') { s.textContent = 'WAITING FOR STT'; s.style.color = '#d4a574'; }
+                }
+
+                function setupAudioCapture() {
+                    if (!scannerAudio || window.__r510CaptureDone) return;
+                    window.__r510CaptureDone = true;
                     try {
-                        if (!scannerPlaying) {
-                            console.log('Scanner not playing, skipping');
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioCtx || !window.MediaRecorder) {
+                            console.warn('Audio capture not available in this browser');
                             return;
                         }
-
-                        const t = transcripts[transcriptIndex % transcripts.length];
-                        const timeStr = new Date().toLocaleTimeString();
-                        console.log('Adding transcript:', t.unit, t.msg.substring(0, 30));
-
-                        // Add to buffer
-                        transcriptBuffer.push({
-                            time: timeStr,
-                            unit: t.unit,
-                            msg: t.msg
-                        });
-
-                        // Keep only last 20
-                        if (transcriptBuffer.length > 20) {
-                            transcriptBuffer.shift();
-                        }
-
-                        console.log('Buffer size:', transcriptBuffer.length, 'About to render...');
-                        // Render all transcripts
-                        renderTranscripts();
-                        console.log('Render complete');
-
-                        transcriptIndex++;
-
-                        if (t.msg.includes('10-91') || t.msg.includes('10-32')) {
-                            addLog('warn', `SCANNER: ${t.msg.substring(0, 40)}`);
-                        }
+                        const ctx = new AudioCtx();
+                        const src = ctx.createMediaElementSource(scannerAudio);
+                        const dest = ctx.createMediaStreamDestination();
+                        src.connect(dest);
+                        src.connect(ctx.destination);
+                        const rec = new MediaRecorder(dest.stream, { mimeType: 'audio/webm;codecs=opus' });
+                        rec.ondataavailable = (ev) => {
+                            if (!ev.data || ev.data.size < 4000) return;
+                            const fd = new FormData();
+                            fd.append('audio', ev.data, 'chunk.webm');
+                            fetch((CONFIG.WHISPER_API || baseUrl + '/transcribe') + '?language=en', { method: 'POST', body: fd })
+                                .then(r => { if (!r.ok) throw new Error('STT ' + r.status); })
+                                .catch(err => { if (pollFailures < 2) console.warn('STT post failed:', err.message); });
+                        };
+                        rec.start(6000);
+                        console.log('Audio capture started (MediaRecorder)');
                     } catch (err) {
-                        console.error('addTranscript CRASHED:', err);
-                        console.error('Error stack:', err.stack);
+                        console.warn('Audio capture setup error:', err.message);
                     }
                 }
 
-                // Add first message immediately
-                console.log('Adding first transcript...');
-                addTranscript();
-                console.log('First transcript added');
+                function watchAudio() {
+                    if (!scannerAudio) return;
+                    scannerAudio.onerror = () => setPanelStatus('signal');
+                    scannerAudio.onstalled = () => {};
+                    scannerAudio.onplaying = () => setPanelStatus('live');
+                }
 
-                // Start interval for new messages
-                console.log('Starting interval...');
-                transcriptInterval = setInterval(() => {
-                    console.log('Interval tick');
-                    if (!scannerPlaying) {
-                        console.log('Scanner stopped, clearing interval');
-                        if (transcriptInterval) {
-                            clearInterval(transcriptInterval);
-                            transcriptInterval = null;
-                        }
-                        return;
-                    }
-                    addTranscript();
-                }, 8000);
-                console.log('Interval started, ID:', transcriptInterval);
+                if (!window.__r510RetryTimer) {
+                    window.__r510RetryTimer = setInterval(() => {
+                        try {
+                            if (scannerAudio && scannerAudio.error) {
+                                scannerAudio.load();
+                                scannerAudio.play().catch(() => {});
+                            }
+                        } catch (err) {}
+                    }, 15000);
+                }
 
+                setupAudioCapture();
+                watchAudio();
+                pollTranscripts();
+                transcriptInterval = setInterval(pollTranscripts, 4000);
+                console.log('Real transcription pipeline started:', baseUrl);
             } catch (err) {
                 console.error('startTranscription error:', err);
                 addLog('error', 'SCANNER: TRANSCRIPT ERROR');
             }
         }
-
         // INITIALIZE
         console.log('R510 Dashboard initializing...');
         updateTelemetry();
@@ -1499,20 +1527,20 @@
 
         setTimeout(fetchNewsMarquee, 2000);
 
-        // DISABLED: Auto-start scanner (use manual button instead)
-        // setTimeout(() => {
-        //     try {
-        //         const container = safeGet('scanner-transcript');
-        //         if (container) {
-        //             window.toggleScanner();
-        //             addLog('info', 'SCANNER: AUTO-STARTED');
-        //         } else {
-        //             console.error('Scanner container not ready');
-        //         }
-        //     } catch (err) {
-        //         console.error('Scanner auto-start failed:', err);
-        //     }
-        // }, 5000);
+        // AUTO-START scanner + transcription (server-side stream puller feeds /transcripts)
+        setTimeout(() => {
+            try {
+                const container = safeGet('scanner-transcript');
+                if (container) {
+                    window.toggleScanner();
+                    addLog('info', 'SCANNER: AUTO-STARTED');
+                } else {
+                    console.error('Scanner container not ready');
+                }
+            } catch (err) {
+                console.error('Scanner auto-start failed:', err);
+            }
+        }, 5000);
 
         // Set up intervals
         setInterval(() => fetchAircraftData(), CONFIG.UPDATE_INTERVAL);
