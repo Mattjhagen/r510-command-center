@@ -13,3 +13,23 @@ venv/
 htmlcov/
 .DS_Store
 *.bak
+
+# Log files
+*.log
+
+# Environment files
+.env
+.env.local
+
+# God's Eye View (separate repository)
+gods-eye-view/
+
+# Process ID files
+*.pid
+bridge.pid
+gods-eye.pid
+
+# Temporary files
+*.tmp
+*.swp
+*~
