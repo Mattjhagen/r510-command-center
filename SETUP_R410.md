@@ -2,6 +2,8 @@
 
 **Goal**: Run the Enhanced Camera Dashboard on R410's monitor instead of R510.
 
+**Status**: ✅ Desktop environment installed, GDM login screen showing
+
 ---
 
 ## 🎯 Why R410 is Better for Cameras
@@ -10,6 +12,16 @@
 - ✅ R510 can keep its original dashboard
 - ✅ Separate machine = better performance
 - ✅ Can access R510's camera services over network
+
+---
+
+## 📋 Progress So Far
+
+- ✅ R410 network connectivity verified (100.65.34.60 tailscale, 192.168.0.180 local)
+- ✅ Chromium browser installed via snap
+- ✅ Ubuntu Desktop environment installed
+- ✅ GDM login screen active on R410's monitor
+- ⏳ **NEXT**: Login and launch camera dashboard
 
 ---
 
@@ -277,4 +289,69 @@ chromium-browser --kiosk http://192.168.0.169:4173
 - Professional interface
 - No file copying or editing
 
-**Ready to try on R410?** 🎥
+---
+
+## 🚀 Next Steps (Tomorrow)
+
+### Step 1: Login to R410's Desktop
+
+**At R410's physical monitor:**
+1. You should see the GDM login screen
+2. Click on your username: `matt`
+3. Enter your password
+4. Press Enter to login
+
+### Step 2: Open Terminal
+
+Once logged into the desktop:
+- Press `Ctrl+Alt+T` to open terminal
+- OR click Activities → Search "terminal"
+
+### Step 3: Launch Camera Dashboard
+
+In the terminal, run:
+```bash
+chromium-browser --kiosk http://100.103.3.35:4173 &
+```
+
+This will open God's Eye View with all 109 cameras in fullscreen kiosk mode.
+
+### Step 4: Verify Everything Works
+
+You should see:
+- ✅ 3D globe interface (Cesium)
+- ✅ Camera markers (📹) across Omaha metro
+- ✅ Click any camera to view live feed
+- ✅ Camera info panel at bottom
+
+### Step 5: Make It Auto-Start on Boot (Optional)
+
+If you want the camera dashboard to open automatically on R410 startup:
+
+```bash
+mkdir -p ~/.config/autostart
+cat > ~/.config/autostart/camera-dashboard.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Camera Dashboard
+Exec=chromium-browser --kiosk http://100.103.3.35:4173
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
+```
+
+---
+
+## 📊 Final Configuration
+
+**R510 (100.103.3.35)**:
+- Monitor: Original dashboard at http://localhost:8421
+- Services: Gods Eye View (port 4173), Bridge API (port 9000)
+- Role: Backend server + original dashboard
+
+**R410 (100.65.34.60)**:
+- Monitor: Camera dashboard at http://100.103.3.35:4173
+- Role: Dedicated camera viewing station
+
+Both accessible via Tailscale network! 🎥
