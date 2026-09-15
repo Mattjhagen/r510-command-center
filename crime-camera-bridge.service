@@ -1,0 +1,42 @@
+[Unit]
+Description=R510 Crime-Camera Bridge Server
+Documentation=https://github.com/Mattjhagen/r510-command-center
+After=network-online.target
+Wants=network-online.target
+PartOf=r510-crime-camera.target
+
+[Service]
+Type=simple
+User=matt
+Group=matt
+WorkingDirectory=/home/matt/r510-command-center
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+# Main process
+ExecStart=/usr/bin/python3 /home/matt/r510-command-center/crime-camera-bridge.py
+
+# Restart policy
+Restart=always
+RestartSec=10s
+StartLimitInterval=5min
+StartLimitBurst=5
+
+# Logging
+StandardOutput=append:/var/log/crime-camera-bridge.log
+StandardError=append:/var/log/crime-camera-bridge.log
+SyslogIdentifier=crime-camera-bridge
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/matt/r510-command-center
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=r510-crime-camera.target

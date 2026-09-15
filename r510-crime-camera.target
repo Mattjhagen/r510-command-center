@@ -1,0 +1,8 @@
+[Unit]
+Description=R510 Crime Camera Command Center
+Documentation=https://github.com/Mattjhagen/r510-command-center
+After=network-online.target
+Wants=network-online.target
+
+[Install]
+WantedBy=multi-user.target
